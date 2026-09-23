@@ -6,9 +6,6 @@ node_modules/
 bxintelligence-api-rest/
 **/bxintelligence-api-rest/
 
-vendor/
-**/vendor/
-
 
 next-app/
 **/next-app/
