@@ -1,0 +1,47 @@
+# Dependências
+node_modules/
+**/node_modules/
+
+
+bxintelligence-api-rest/
+**/bxintelligence-api-rest/
+
+vendor/
+**/vendor/
+
+
+next-app/
+**/next-app/
+
+
+# Builds
+.next/
+**/.next/
+out/
+dist/
+build/
+
+# Variáveis de ambiente
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Cache
+.cache/
+.turbo/
