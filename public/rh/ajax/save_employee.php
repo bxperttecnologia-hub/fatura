@@ -38,7 +38,13 @@ $marital_status  = trim($_POST['marital_status'] ?? '');
 $academic_level  = trim($_POST['academic_level'] ?? '');
 $contract_type   = trim($_POST['contract_type'] ?? '');
 $admission_date  = $_POST['admission_date'] ?? null;
+$end_date        = $_POST['end_date'] ?? null;
 $iban            = trim($_POST['iban'] ?? '');
+
+// Data de término só faz sentido para vínculos "a termo"
+if ($contract_type !== 'atermo' || empty($end_date)) {
+    $end_date = null;
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -222,6 +228,7 @@ try {
                 academic_level = :academic_level,
                 contract_type = :contract_type,
                 admission_date = :admission_date,
+                end_date = :end_date,
                 iban = :iban,
 
                 photo_url = :photo_url,
@@ -246,6 +253,7 @@ try {
             ':academic_level'  => $academic_level,
             ':contract_type'   => $contract_type,
             ':admission_date'  => $admission_date,
+            ':end_date'        => $end_date,
             ':iban'            => $iban,
 
             ':photo_url'       => $photoUrl,
@@ -280,6 +288,7 @@ try {
                 academic_level,
                 contract_type,
                 admission_date,
+                end_date,
                 iban,
 
                 photo_url,
@@ -301,6 +310,7 @@ try {
                 :academic_level,
                 :contract_type,
                 :admission_date,
+                :end_date,
                 :iban,
 
                 :photo_url,
@@ -325,6 +335,7 @@ try {
             ':academic_level'  => $academic_level,
             ':contract_type'   => $contract_type,
             ':admission_date'  => $admission_date,
+            ':end_date'        => $end_date,
             ':iban'            => $iban,
 
             ':photo_url'       => $newPhoto,

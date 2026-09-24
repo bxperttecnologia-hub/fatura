@@ -147,6 +147,10 @@ require_once '../app/views/layout_creation.php';
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">Folha de Pagamento</h5>
                         <div class="d-flex gap-2 mb-3">
+                            <button class="btn btn-sm rounded-pill d-flex gap-1 align-items-center btn-primary" data-bs-toggle="modal" data-bs-target="#modalIssuePayroll">
+                                <i class="material-icons-round">playlist_add_check</i>
+                                Emitir Folha do Mês
+                            </button>
                             <button class="btn btn-sm rounded-pill d-flex gap-1 align-items-center btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalPayroll">
                                 <i class="material-icons-round">attach_money</i>
                                 Registrar Pagamento
@@ -341,6 +345,101 @@ require_once '../app/views/layout_creation.php';
     </div>
 </div>
 
+<!-- Modal Emitir Folha do Mês (lote) -->
+<div class="modal fade" id="modalIssuePayroll" tabindex="-1" aria-labelledby="modalIssuePayrollLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+
+            <!-- HEADER -->
+            <div class="modal-header bg-gradient-primary text-white py-3">
+                <div>
+                    <h5 class="modal-title fw-bold mb-0" id="modalIssuePayrollLabel">
+                        <i class="bi bi-playlist-check"></i> Emitir Folha do Mês
+                    </h5>
+                    <small class="opacity-75" id="issuePayrollSubtitle">Selecione o mês e os colaboradores</small>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body p-4 bg-light">
+
+                <!-- ETAPA 1: SELEÇÃO -->
+                <div id="issuePayrollStepSelect">
+
+                    <div class="mb-3">
+                        <label class="fw-bold">Mês de referência</label>
+                        <input type="month" id="issuePayrollMonth" class="form-control w-auto">
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <label class="fw-bold mb-0">Colaboradores</label>
+                        <div>
+                            <button type="button" class="btn btn-sm btn-link" id="issuePayrollSelectAll">Selecionar todos</button>
+                            <button type="button" class="btn btn-sm btn-link" id="issuePayrollSelectNone">Limpar seleção</button>
+                        </div>
+                    </div>
+
+                    <div id="issuePayrollEmployeeList" class="border rounded-3 bg-white p-2" style="max-height: 320px; overflow-y: auto;">
+                        <p class="text-muted text-center my-3">Selecione o mês para carregar os colaboradores.</p>
+                    </div>
+                </div>
+
+                <!-- ETAPA 2: RESUMO / APROVAÇÃO -->
+                <div id="issuePayrollStepSummary" style="display:none;">
+
+                    <div class="alert alert-warning d-flex align-items-center gap-2" id="issuePayrollSkippedAlert" style="display:none;"></div>
+
+                    <div class="table-responsive border rounded-3 bg-white" style="max-height: 360px; overflow-y: auto;">
+                        <table class="table table-sm mb-0">
+                            <thead class="table-light" style="position: sticky; top: 0;">
+                                <tr>
+                                    <th>Colaborador</th>
+                                    <th class="text-end">Salário Base</th>
+                                    <th class="text-end">Descontos</th>
+                                    <th class="text-end">Líquido</th>
+                                </tr>
+                            </thead>
+                            <tbody id="issuePayrollSummaryBody"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mt-3 p-3 bg-white rounded-3 border">
+                        <span class="fw-bold">Total líquido a pagar</span>
+                        <span class="fw-bold fs-5 text-primary" id="issuePayrollTotalNet">Kz 0,00</span>
+                    </div>
+
+                    <p class="text-muted small mt-2 mb-0">
+                        Confira os valores acima. A folha só será gravada depois de clicar em "Aprovar e Emitir".
+                    </p>
+                </div>
+
+            </div>
+
+            <!-- FOOTER -->
+            <div class="modal-footer bg-white border-0 px-4 py-3">
+
+                <button type="button" class="btn btn-light px-4 rounded-pill" data-bs-dismiss="modal">
+                    Cancelar
+                </button>
+
+                <button type="button" class="btn btn-outline-secondary px-4 rounded-pill" id="issuePayrollBackBtn" style="display:none;">
+                    ← Voltar
+                </button>
+
+                <button type="button" class="btn btn-primary px-5 rounded-pill shadow-sm fw-bold" id="issuePayrollCalcBtn">
+                    Calcular Folha →
+                </button>
+
+                <button type="button" class="btn btn-success px-5 rounded-pill shadow-sm fw-bold" id="issuePayrollApproveBtn" style="display:none;">
+                    ✓ Aprovar e Emitir
+                </button>
+
+            </div>
+
+        </div>
+    </div>
+</div>
+
 
 <!-- jsPDF PRIMEIRO -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -350,8 +449,10 @@ require_once '../app/views/layout_creation.php';
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
 
 <script>
+    let table;
+
     $(document).ready(function() {
-        const table = $('#payrollTable').DataTable({
+        table = $('#payrollTable').DataTable({
             ajax: {
                 url: 'rh/ajax/list_payroll.php',
                 data: function(d) {
@@ -550,6 +651,206 @@ require_once '../app/views/layout_creation.php';
 
         window.open(`rh/ajax/export_all_payroll_pdf.php?mes=${mes}`, '_blank');
     });
+
+    // =========================
+    // EMITIR FOLHA DO MÊS (LOTE)
+    // =========================
+    (function() {
+        let calculatedItems = [];
+
+        const $modal = $('#modalIssuePayroll');
+        const $month = $('#issuePayrollMonth');
+        const $list = $('#issuePayrollEmployeeList');
+        const $stepSelect = $('#issuePayrollStepSelect');
+        const $stepSummary = $('#issuePayrollStepSummary');
+        const $calcBtn = $('#issuePayrollCalcBtn');
+        const $approveBtn = $('#issuePayrollApproveBtn');
+        const $backBtn = $('#issuePayrollBackBtn');
+        const $subtitle = $('#issuePayrollSubtitle');
+
+        function fmtKz(v) {
+            return `Kz ${parseFloat(v || 0).toLocaleString('pt-AO', { minimumFractionDigits: 2 })}`;
+        }
+
+        function resetWizard() {
+            calculatedItems = [];
+            $stepSelect.show();
+            $stepSummary.hide();
+            $calcBtn.show();
+            $approveBtn.hide();
+            $backBtn.hide();
+            $subtitle.text('Selecione o mês e os colaboradores');
+            $list.html('<p class="text-muted text-center my-3">Selecione o mês para carregar os colaboradores.</p>');
+        }
+
+        function loadEmployees() {
+            const mes = $month.val();
+
+            if (!mes) {
+                $list.html('<p class="text-muted text-center my-3">Selecione o mês para carregar os colaboradores.</p>');
+                return;
+            }
+
+            $list.html('<p class="text-muted text-center my-3">A carregar...</p>');
+
+            $.get('rh/ajax/list_employees_for_payroll.php', { mes: mes }, function(res) {
+                if (!res || !res.success || !Array.isArray(res.data) || !res.data.length) {
+                    $list.html('<p class="text-muted text-center my-3">Nenhum colaborador ativo encontrado.</p>');
+                    return;
+                }
+
+                // Todos os colaboradores vêm selecionados por defeito
+                const rowsHtml = res.data.map(emp => `
+                    <div class="form-check py-1 border-bottom">
+                        <input class="form-check-input issuePayrollCheckbox" type="checkbox"
+                            value="${emp.id}" id="issueEmp${emp.id}" checked>
+                        <label class="form-check-label d-flex justify-content-between w-100" for="issueEmp${emp.id}">
+                            <span>${emp.name} <small class="text-muted">(${emp.position})</small></span>
+                            ${emp.already_issued ? `<span class="badge bg-warning text-dark">Já tem folha (${emp.existing_status})</span>` : ''}
+                        </label>
+                    </div>
+                `).join('');
+
+                $list.html(rowsHtml);
+            }, 'json').fail(function() {
+                $list.html('<p class="text-danger text-center my-3">Erro ao carregar colaboradores.</p>');
+            });
+        }
+
+        $modal.on('show.bs.modal', function() {
+            resetWizard();
+            if (!$month.val()) {
+                $month.val($('#inputMesReferencia').val() || '');
+            }
+            loadEmployees();
+        });
+
+        $month.on('change', loadEmployees);
+
+        $('#issuePayrollSelectAll').on('click', function() {
+            $('.issuePayrollCheckbox').prop('checked', true);
+        });
+
+        $('#issuePayrollSelectNone').on('click', function() {
+            $('.issuePayrollCheckbox').prop('checked', false);
+        });
+
+        // ETAPA 1 -> Calcular
+        $calcBtn.on('click', function() {
+            const mes = $month.val();
+            const ids = $('.issuePayrollCheckbox:checked').map(function() {
+                return $(this).val();
+            }).get();
+
+            if (!mes) {
+                return Swal.fire('Atenção', 'Selecione o mês de referência.', 'warning');
+            }
+
+            if (!ids.length) {
+                return Swal.fire('Atenção', 'Selecione pelo menos um colaborador.', 'warning');
+            }
+
+            $calcBtn.prop('disabled', true).text('A calcular...');
+
+            $.post('rh/ajax/calculate_payroll_batch.php', {
+                reference_month: mes,
+                employee_ids: ids
+            }, function(res) {
+                $calcBtn.prop('disabled', false).text('Calcular Folha →');
+
+                if (!res || !res.success) {
+                    return Swal.fire('Erro', res?.message || 'Falha ao calcular a folha.', 'error');
+                }
+
+                calculatedItems = res.items || [];
+
+                if (!calculatedItems.length) {
+                    return Swal.fire('Atenção', 'Nenhum colaborador pôde ser calculado.', 'warning');
+                }
+
+                const bodyHtml = calculatedItems.map(item => `
+                    <tr>
+                        <td>${item.employee_name}</td>
+                        <td class="text-end">${fmtKz(item.base_salary)}</td>
+                        <td class="text-end text-danger">${fmtKz(item.discounts)}</td>
+                        <td class="text-end fw-bold">${fmtKz(item.net_salary)}</td>
+                    </tr>
+                `).join('');
+
+                $('#issuePayrollSummaryBody').html(bodyHtml);
+                $('#issuePayrollTotalNet').text(fmtKz(res.total_net));
+
+                if (res.errors && res.errors.length) {
+                    $('#issuePayrollSkippedAlert')
+                        .show()
+                        .html(`<i class="bi bi-exclamation-triangle"></i> ${res.errors.join('<br>')}`);
+                } else {
+                    $('#issuePayrollSkippedAlert').hide();
+                }
+
+                $stepSelect.hide();
+                $stepSummary.show();
+                $calcBtn.hide();
+                $backBtn.show();
+                $approveBtn.show();
+                $subtitle.text(`Resumo de ${calculatedItems.length} colaborador(es) — confirme antes de emitir`);
+            }, 'json').fail(function() {
+                $calcBtn.prop('disabled', false).text('Calcular Folha →');
+                Swal.fire('Erro', 'Falha na requisição.', 'error');
+            });
+        });
+
+        // Voltar à seleção
+        $backBtn.on('click', function() {
+            $stepSummary.hide();
+            $stepSelect.show();
+            $calcBtn.show();
+            $backBtn.hide();
+            $approveBtn.hide();
+            $subtitle.text('Selecione o mês e os colaboradores');
+        });
+
+        // ETAPA 2 -> Aprovar e Emitir (só agora é que grava na BD)
+        $approveBtn.on('click', function() {
+            const mes = $month.val();
+            const ids = calculatedItems.map(item => item.employee_id);
+
+            Swal.fire({
+                title: 'Confirmar emissão?',
+                text: `Vai emitir a folha de ${ids.length} colaborador(es) para ${mes}. Esta ação não pode ser desfeita.`,
+                icon: 'question',
+                showCancelButton: true,
+                cancelButtonText: 'Cancelar',
+                confirmButtonText: 'Sim, emitir'
+            }).then(result => {
+                if (!result.isConfirmed) return;
+
+                $approveBtn.prop('disabled', true).text('A emitir...');
+
+                $.post('rh/ajax/issue_payroll_batch.php', {
+                    reference_month: mes,
+                    employee_ids: ids,
+                    approved: 1
+                }, function(res) {
+                    $approveBtn.prop('disabled', false).text('✓ Aprovar e Emitir');
+
+                    if (!res || !res.success) {
+                        return Swal.fire('Erro', res?.message || 'Falha ao emitir a folha.', 'error');
+                    }
+
+                    $modal.modal('hide');
+                    table.ajax.reload();
+
+                    Swal.fire('Sucesso', res.message || 'Folha emitida com sucesso!', 'success');
+                }, 'json').fail(function() {
+                    $approveBtn.prop('disabled', false).text('✓ Aprovar e Emitir');
+                    Swal.fire('Erro', 'Falha na requisição.', 'error');
+                });
+            });
+        });
+
+        $modal.on('hidden.bs.modal', resetWizard);
+    })();
 </script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-mask/1.14.16/jquery.mask.min.js"></script>

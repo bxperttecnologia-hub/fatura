@@ -83,7 +83,9 @@ $(document).ready(function () {
           $("#contact_name").val(contato.name).prop("disabled", true);
           $("#email").val(contato.email).prop("disabled", true);
           $("#contributor").val(contato.contributor).prop("disabled", true);
-          $("#po_box").val(contato.po_box || contato.telephone).prop("disabled", true);
+          $("#po_box")
+            .val(contato.po_box || contato.telephone)
+            .prop("disabled", true);
           $("#address").val(contato.address).prop("disabled", true);
           selectCountry(contato.country, contato.city);
 
@@ -1465,12 +1467,17 @@ $(document).ready(function () {
     event.preventDefault();
 
     const draft = getStoredDraft();
-    if (draft) {
+    // 🔐 Só restaura dados do rascunho se o utilizador ainda NÃO escolheu
+    // nenhum cliente neste formulário. "anon" (Cliente X) também é um valor
+    // válido aqui — sem este guard, o rascunho gravado no localStorage
+    // sobrepunha-se à escolha do Cliente X e reativava um contacto antigo.
+    const hasContactAlreadySelected = Boolean($("#contact-select").val());
+    if (draft && !hasContactAlreadySelected) {
       const draftForm = draft.form || {};
       const draftContactId =
         draft?.meta?.contact_select || draftForm.contact_id || "";
 
-      if (draftContactId && !$("#contact-select").val()) {
+      if (draftContactId) {
         $("#contact-select").val(draftContactId).trigger("change");
       }
 

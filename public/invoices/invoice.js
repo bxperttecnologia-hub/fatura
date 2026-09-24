@@ -1166,119 +1166,75 @@ $(function () {
   // Função principal
   // ---------------------------------------------------------------------------
 
-  async function gerarPdfFatura(
-    invoiceData,
-    filename = "fatura.pdf",
-    copies = 2,
-  ) {
+  // Pede o PDF à API e devolve o Blob. Não descarrega nada: a pré-visualização
+  // decide se mostra, imprime ou descarrega o mesmo ficheiro.
+  async function fetchInvoicePdfBlob(invoiceData, copies = 2) {
+    const payload = {
+      ...invoiceData,
+      copies: Number(copies) || 1,
+      document_url: new URL(
+        `invoices/ajax/invoice_public.php?id=${encodeURIComponent(invoiceData.id)}`,
+        window.location.href,
+      ).toString(),
+    };
+
+    const hostname = window.location.hostname;
+    const apiBaseUrl =
+      hostname === "api-crm.bxpert.co.ao" ||
+      hostname === "www.api-crm.bxpert.co.ao"
+        ? "https://api-crm.bxpert.co.ao"
+        : "http://localhost:3004";
+
+    let response;
     try {
-      // Garante que copies seja enviado para o backend
-      const payload = {
-        ...invoiceData,
-        copies: Number(copies) || 1,
-        document_url: new URL(
-          `invoices/ajax/invoice_public.php?id=${encodeURIComponent(invoiceData.id)}`,
-          window.location.href,
-        ).toString(),
-      };
+      response = await fetch(`${apiBaseUrl}/api/invoices/pdf`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/pdf",
+        },
+        body: JSON.stringify(payload),
+      });
+    } catch (_) {
+      throw new Error(
+        `Não foi possível conectar à API de PDF em ${apiBaseUrl}. Verifique se o bxintelligence-api-rest está em execução.`,
+      );
+    }
 
-      const hostname = window.location.hostname;
-      const apiBaseUrl =
-        hostname === "api-crm.bxpert.co.ao" ||
-        hostname === "www.api-crm.bxpert.co.ao"
-          ? "https://api-crm.bxpert.co.ao"
-          : "http://localhost:3004";
+    const contentType = response.headers.get("content-type") || "";
+    const isPdf =
+      contentType.includes("application/pdf") ||
+      contentType.includes("application/octet-stream");
 
-      let response;
+    if (!response.ok) {
+      let errorMessage = `Erro HTTP ${response.status}`;
+
       try {
-        response = await fetch(`${apiBaseUrl}/api/invoices/pdf`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/pdf",
-          },
-          body: JSON.stringify(payload),
-        });
+        const errorData = await response.clone().json();
+        if (errorData?.message) errorMessage = errorData.message;
+        if (errorData?.error) errorMessage += `: ${errorData.error}`;
       } catch (_) {
-        throw new Error(
-          `Não foi possível conectar à API de PDF em ${apiBaseUrl}. Verifique se o bxintelligence-api-rest está em execução na porta 4000.`,
-        );
+        const text = await response.text();
+        if (text) errorMessage = text.slice(0, 240);
       }
 
-      const contentType = response.headers.get("content-type") || "";
-      const isPdf =
-        contentType.includes("application/pdf") ||
-        contentType.includes("application/octet-stream");
-
-      if (!response.ok) {
-        let errorMessage = `Erro HTTP ${response.status}`;
-
-        try {
-          const errorData = await response.clone().json();
-          if (errorData?.message) errorMessage = errorData.message;
-          if (errorData?.error) errorMessage += `: ${errorData.error}`;
-        } catch (_) {
-          const text = await response.text();
-          if (text) errorMessage = text.slice(0, 240);
-        }
-
-        throw new Error(errorMessage);
-      }
-
-      if (!isPdf) {
-        const fallbackText = await response.text();
-        throw new Error(
-          `Resposta inesperada do servidor PDF: ${fallbackText.slice(0, 240)}`,
-        );
-      }
-
-      const blob = await response.blob();
-
-      if (!blob || blob.size === 0) {
-        throw new Error("O servidor devolveu um PDF vazio.");
-      }
-
-      // Cria URL temporária para o PDF
-      const url = window.URL.createObjectURL(blob);
-
-      // Cria link temporário
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = filename;
-
-      document.body.appendChild(link);
-      link.click();
-
-      // Limpeza
-      link.remove();
-      window.URL.revokeObjectURL(url);
-
-      return true;
-    } catch (error) {
-      console.error("Erro ao gerar PDF da factura:", error);
-
-      alert("Não foi possível gerar o PDF da factura.\n\n" + error.message);
-
-      return false;
-    }
-  }
-
-  function setPdfButtonState(button, loading, message = "Baixar PDF") {
-    const $button = $(button);
-    if (!$button.length) return;
-
-    if (loading) {
-      $button.prop("disabled", true).attr("aria-busy", "true").html(`
-          <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-          <span>${message}</span>
-        `);
-      return;
+      throw new Error(errorMessage);
     }
 
-    $button.prop("disabled", false).removeAttr("aria-busy").html(`
-        <span class="material-icons-outlined">picture_as_pdf</span>
-        ${message}
-      `);
+    if (!isPdf) {
+      const fallbackText = await response.text();
+      throw new Error(
+        `Resposta inesperada do servidor PDF: ${fallbackText.slice(0, 240)}`,
+      );
+    }
+
+    const blob = await response.blob();
+
+    if (!blob || blob.size === 0) {
+      throw new Error("O servidor devolveu um PDF vazio.");
+    }
+
+    return blob;
   }
 
   function createInvoicePageClone(element, items, viaLabel) {
@@ -1370,19 +1326,25 @@ $(function () {
       ...splitInvoiceItems(element, items, "Original"),
       ...splitInvoiceItems(element, items, "Duplicado"),
     ];
-    const pdf = new JsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+    const pdf = new JsPDF({
+      unit: "mm",
+      format: "a4",
+      orientation: "portrait",
+    });
     try {
       for (const [index, page] of pages.entries()) {
         staging.replaceChildren(page);
 
         const images = Array.from(page.querySelectorAll("img"));
-        await Promise.all(images.map((image) => {
-          if (image.complete) return Promise.resolve();
-          return new Promise((resolve) => {
-            image.addEventListener("load", resolve, { once: true });
-            image.addEventListener("error", resolve, { once: true });
-          });
-        }));
+        await Promise.all(
+          images.map((image) => {
+            if (image.complete) return Promise.resolve();
+            return new Promise((resolve) => {
+              image.addEventListener("load", resolve, { once: true });
+              image.addEventListener("error", resolve, { once: true });
+            });
+          }),
+        );
 
         const canvas = await html2canvas(page, {
           scale: 2,
@@ -1433,34 +1395,277 @@ $(function () {
   }
 
   // ---------------------------------------------------------------------------
-  // Exemplo de uso (substitui o antigo #btnPdf / #generatePdf)
+  // TALÃO TÉRMICO (80mm) — HTML usado na pré-visualização e impressão
   // ---------------------------------------------------------------------------
-  //
+  // Gera um recibo simplificado (tipo POS) a partir dos mesmos dados já
+  // carregados em `currentInvoice`, formatado para papel de rolo 80mm, e
+  // imprime usando o diálogo nativo do browser (não depende de API externa).
+  // ---------------------------------------------------------------------------
 
-  $("#btnPdf, #generatePdf").on("click", async function () {
-    const button = this;
+  function escapeHtml(value) {
+    return String(value ?? "").replace(
+      /[&<>"']/g,
+      (c) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[c],
+    );
+  }
 
-    if ($(button).prop("disabled")) return;
+  function buildThermalReceiptHtml(inv) {
+    const symbol = inv.symbol || inv.company_symbol || "Kz";
+    const position = inv.position || inv.company_position || "right";
+    const items = Array.isArray(inv.items) ? inv.items : [];
 
-    setPdfButtonState(button, true, "Preparando PDF...");
+    const rowsHtml = items
+      .map((it) => {
+        const { total } = calcItemTotal(it);
+        const qty = Number(it.quantity) || 0;
+        const price = Number(it.unit_price) || 0;
+        return `
+        <div class="t-item-name">${escapeHtml(it.name || it.code || "-")}</div>
+        <div class="t-item-line">
+          <span>${qty} x ${formatCurrency(price, symbol, position)}</span>
+          <span>${formatCurrency(total, symbol, position)}</span>
+        </div>`;
+      })
+      .join("");
 
-    try {
+    const docLabel = inv.document_type === "PF" ? "Proforma" : "Factura";
+    const docNumber =
+      inv.reference ||
+      inv.codigo ||
+      (inv.series ? `${inv.series}/${inv.id}` : inv.id);
+
+    return `<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<title>Talão ${escapeHtml(String(docNumber))}</title>
+<style>
+  @page { size: 80mm auto; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+  }
+  body {
+    width: 72mm;
+    margin: 0 auto;
+    padding: 3mm 3mm 8mm;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 11px;
+    line-height: 1.35;
+    color: #000;
+  }
+  .t-center { text-align: center; }
+  .t-bold { font-weight: bold; }
+  .t-line { border-top: 1px dashed #000; margin: 5px 0; }
+  .t-row { display: flex; justify-content: space-between; }
+  .t-item-name { margin-top: 5px; }
+  .t-item-line { display: flex; justify-content: space-between; font-size: 10.5px; }
+  .t-total-row { display: flex; justify-content: space-between; font-size: 13px; margin-top: 2px; }
+  .t-footer { text-align: center; font-size: 10px; margin-top: 10px; }
+  div, p { margin: 0; }
+</style>
+</head>
+<body>
+  <div class="t-center t-bold" style="font-size:13px;">${escapeHtml(inv.company_name || "")}</div>
+  ${inv.company_address ? `<div class="t-center">${escapeHtml(inv.company_address)}</div>` : ""}
+  ${inv.company_city ? `<div class="t-center">${escapeHtml(inv.company_city)}</div>` : ""}
+  ${inv.company_phone ? `<div class="t-center">Tel: ${escapeHtml(inv.company_phone)}</div>` : ""}
+  ${inv.registration_number ? `<div class="t-center">NIF: ${escapeHtml(inv.registration_number)}</div>` : ""}
+  <div class="t-line"></div>
+  <div class="t-center t-bold">${escapeHtml(docLabel)} Simplificada</div>
+  <div class="t-center">Nº ${escapeHtml(String(docNumber))}</div>
+  <div class="t-center">${dateBr(inv.issue_date)}</div>
+  <div class="t-line"></div>
+  <div>Cliente: ${escapeHtml(inv.client_name || "Consumidor Final")}</div>
+  ${inv.client_contributor ? `<div>Contribuinte: ${escapeHtml(inv.client_contributor)}</div>` : ""}
+  <div class="t-line"></div>
+  ${rowsHtml}
+  <div class="t-line"></div>
+  <div class="t-row"><span>Subtotal:</span><span>${formatCurrency(inv.total_sum, symbol, position)}</span></div>
+  ${Number(inv.total_discount) > 0 ? `<div class="t-row"><span>Desconto:</span><span>${formatCurrency(inv.total_discount, symbol, position)}</span></div>` : ""}
+  <div class="t-row"><span>IVA:</span><span>${formatCurrency(inv.total_tax, symbol, position)}</span></div>
+  ${Number(inv.retention_value) > 0 ? `<div class="t-row"><span>Retenção:</span><span>${formatCurrency(inv.retention_value, symbol, position)}</span></div>` : ""}
+  <div class="t-line"></div>
+  <div class="t-total-row t-bold"><span>TOTAL:</span><span>${formatCurrency(inv.final_total, symbol, position)}</span></div>
+  <div class="t-line"></div>
+  <div class="t-footer">
+    Obrigado pela preferência!<br>
+    Documento processado por computador
+  </div>
+</body>
+</html>`;
+  }
+
+  // ---------------------------------------------------------------------------
+  // PRÉ-VISUALIZAR E IMPRIMIR
+  // O botão "Imprimir / Baixar" abre o modal #modalPrintPreview: o utilizador
+  // escolhe o formato (A4 em PDF ou talão de 80mm), vê o documento e só depois
+  // imprime ou descarrega.
+  // ---------------------------------------------------------------------------
+  const ppModalEl = document.getElementById("modalPrintPreview");
+
+  if (ppModalEl) {
+    const ppFrame = document.getElementById("ppFrame");
+    const ppLoading = document.getElementById("ppLoading");
+    const ppError = document.getElementById("ppError");
+    const ppErrorText = document.getElementById("ppErrorText");
+    const ppCopiesBox = document.getElementById("ppCopiesBox");
+    const ppPrintBtn = document.getElementById("ppPrint");
+    const ppDownloadBtn = document.getElementById("ppDownload");
+
+    // Estilos só para o ecrã: dão fundo cinzento e "papel" ao talão na pré-visualização.
+    // Ficam dentro de @media screen, por isso não afectam a impressão.
+    const PP_THERMAL_SCREEN_CSS =
+      "<style>@media screen{html{background:#d1d5db}" +
+      "body{background:#fff;margin:16px auto;box-shadow:0 2px 10px rgba(0,0,0,.25)}}</style>";
+
+    const pp = {
+      format: "a4", // "a4" | "thermal"
+      copies: 2,
+      cache: new Map(), // nº de vias -> { url, blob }
+      token: 0, // descarta respostas de pedidos antigos
+    };
+
+    function ppSetState(state, message) {
+      ppLoading.classList.toggle("d-none", state !== "loading");
+      ppError.classList.toggle("d-none", state !== "error");
+      if (state === "error")
+        ppErrorText.textContent = message || "Erro desconhecido.";
+
+      const ready = state === "ready";
+      ppPrintBtn.disabled = !ready;
+      ppDownloadBtn.disabled = !ready;
+    }
+
+    function ppSyncControls() {
+      const isA4 = pp.format === "a4";
+      ppCopiesBox.classList.toggle("d-none", !isA4);
+      ppDownloadBtn.classList.toggle("d-none", !isA4);
+    }
+
+    function ppFilename() {
+      const base = String(currentInvoice?.reference || "fatura").replace(
+        /[\\/:*?"<>|]+/g,
+        "-",
+      );
+      return `${base}.pdf`;
+    }
+
+    function ppReleaseCache() {
+      pp.cache.forEach((entry) => URL.revokeObjectURL(entry.url));
+      pp.cache.clear();
+    }
+
+    async function ppRender() {
+      const token = ++pp.token;
+
       if (!currentInvoice) {
-        throw new Error("A fatura ainda está a carregar.");
+        ppSetState("error", "A fatura ainda está a carregar.");
+        return;
       }
 
-      const filename = `${currentInvoice.reference || "fatura"}.pdf`;
+      ppSetState("loading");
 
-      setPdfButtonState(button, true, "Baixando PDF...");
-      await gerarPdfFatura(currentInvoice, filename, 2);
-    } catch (error) {
-      console.error("Erro ao preparar factura para PDF:", error);
+      try {
+        ppFrame.onload = () => {
+          if (token === pp.token) ppSetState("ready");
+        };
 
-      alert("Erro ao preparar a factura:\n\n" + error.message);
-    } finally {
-      setPdfButtonState(button, false);
+        if (pp.format === "thermal") {
+          const html = buildThermalReceiptHtml(currentInvoice).replace(
+            "</head>",
+            PP_THERMAL_SCREEN_CSS + "</head>",
+          );
+          ppFrame.srcdoc = html;
+          return;
+        }
+
+        let entry = pp.cache.get(pp.copies);
+
+        if (!entry) {
+          const blob = await fetchInvoicePdfBlob(currentInvoice, pp.copies);
+          if (token !== pp.token) return; // o utilizador já mudou de opção
+          entry = { blob, url: URL.createObjectURL(blob) };
+          pp.cache.set(pp.copies, entry);
+        }
+
+        ppFrame.removeAttribute("srcdoc");
+        ppFrame.src = entry.url;
+      } catch (error) {
+        console.error("Erro na pré-visualização:", error);
+        if (token === pp.token) ppSetState("error", error.message);
+      }
     }
-  });
+
+    // Abre sempre em A4 (o formato habitual) e limpa tudo ao fechar
+    ppModalEl.addEventListener("shown.bs.modal", () => {
+      pp.format =
+        ppModalEl.querySelector('input[name="pp_format"]:checked')?.value ||
+        "a4";
+      pp.copies = Number(document.getElementById("ppCopies").value) || 2;
+      ppSyncControls();
+      ppRender();
+    });
+
+    ppModalEl.addEventListener("hidden.bs.modal", () => {
+      pp.token++;
+      ppFrame.onload = null;
+      ppFrame.removeAttribute("srcdoc");
+      ppFrame.src = "about:blank";
+      ppReleaseCache();
+    });
+
+    ppModalEl.querySelectorAll('input[name="pp_format"]').forEach((radio) => {
+      radio.addEventListener("change", () => {
+        pp.format = radio.value;
+        ppSyncControls();
+        ppRender();
+      });
+    });
+
+    document.getElementById("ppCopies").addEventListener("change", (e) => {
+      pp.copies = Number(e.target.value) || 2;
+      ppRender();
+    });
+
+    document.getElementById("ppRetry").addEventListener("click", ppRender);
+
+    ppPrintBtn.addEventListener("click", () => {
+      try {
+        ppFrame.contentWindow.focus();
+        ppFrame.contentWindow.print();
+      } catch (error) {
+        // Alguns browsers não deixam imprimir o visualizador de PDF dentro da página
+        const entry = pp.cache.get(pp.copies);
+        if (pp.format === "a4" && entry) {
+          window.open(entry.url, "_blank");
+        } else {
+          console.error("Erro ao imprimir:", error);
+          alert("Não foi possível abrir a impressão.\n\n" + error.message);
+        }
+      }
+    });
+
+    ppDownloadBtn.addEventListener("click", () => {
+      const entry = pp.cache.get(pp.copies);
+      if (!entry) return;
+
+      const link = document.createElement("a");
+      link.href = entry.url;
+      link.download = ppFilename();
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    });
+  }
 
   // ---------- Nota de Crédito ----------
   $("#btnNotaCredito").on("click", async function () {

@@ -195,12 +195,30 @@ require_once '../app/views/layout_creation.php';
         margin-top: 12px;
     }
 
-    #invoiceInsights .status-card--pending { border-left-color: #f59e0b; }
-    #invoiceInsights .status-card--cancelled { border-left-color: #ef4444; }
-    #invoiceInsights .status-card--paid { border-left-color: #16a34a; }
-    #invoiceInsights .status-card--partial { border-left-color: #3b82f6; }
-    #invoiceInsights .status-card--draft { border-left-color: #94a3b8; }
-    #invoiceInsights .status-card--overdue { border-left-color: #dc2626; }
+    #invoiceInsights .status-card--pending {
+        border-left-color: #f59e0b;
+    }
+
+    #invoiceInsights .status-card--cancelled {
+        border-left-color: #ef4444;
+    }
+
+    #invoiceInsights .status-card--paid {
+        border-left-color: #16a34a;
+    }
+
+    #invoiceInsights .status-card--partial {
+        border-left-color: #3b82f6;
+    }
+
+    #invoiceInsights .status-card--draft {
+        border-left-color: #94a3b8;
+    }
+
+    #invoiceInsights .status-card--overdue {
+        border-left-color: #dc2626;
+    }
+
     #invoiceInsights .status-card--expected {
         background: #172033;
         border-color: #172033;
@@ -230,14 +248,41 @@ require_once '../app/views/layout_creation.php';
         padding: 18px 20px;
     }
 
-    #invoiceCollectionFeature h3 { font-size: 1rem; margin: 0 0 5px; }
-    #invoiceCollectionFeature p { color: rgba(255,255,255,.75); font-size: .82rem; margin: 0; }
-    #invoiceCollectionFeature .collection-summary { color: rgba(255,255,255,.75); font-size: .76rem; margin-top: 8px; }
-    #invoiceCollectionFeature .btn { white-space: nowrap; }
+    #invoiceCollectionFeature h3 {
+        font-size: 1rem;
+        margin: 0 0 5px;
+    }
 
-    #collectionModal .modal-content { border: 0; border-radius: 18px; }
-    #collectionModal .modal-header { background: #172033; color: #fff; }
-    #collectionModal .modal-header .btn-close { filter: invert(1); }
+    #invoiceCollectionFeature p {
+        color: rgba(255, 255, 255, .75);
+        font-size: .82rem;
+        margin: 0;
+    }
+
+    #invoiceCollectionFeature .collection-summary {
+        color: rgba(255, 255, 255, .75);
+        font-size: .76rem;
+        margin-top: 8px;
+    }
+
+    #invoiceCollectionFeature .btn {
+        white-space: nowrap;
+    }
+
+    #collectionModal .modal-content {
+        border: 0;
+        border-radius: 18px;
+    }
+
+    #collectionModal .modal-header {
+        background: #172033;
+        color: #fff;
+    }
+
+    #collectionModal .modal-header .btn-close {
+        filter: invert(1);
+    }
+
     #collectionModal .collection-selected {
         background: #f6f8fb;
         border: 1px solid #e7ebf1;
@@ -247,6 +292,7 @@ require_once '../app/views/layout_creation.php';
         overflow-y: auto;
         padding: 9px 12px;
     }
+
     #collectionModal .collection-tip {
         background: #eef5ff;
         border-radius: 10px;
@@ -256,12 +302,17 @@ require_once '../app/views/layout_creation.php';
     }
 
     @media (max-width: 1100px) {
-        #invoiceInsights .status-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        #invoiceInsights .status-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
     }
 
     @media (max-width: 767px) {
+
         #invoiceInsights .insight-grid,
-        #invoiceInsights .status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        #invoiceInsights .status-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
     }
 
     /* ===================================================
@@ -400,7 +451,59 @@ require_once '../app/views/layout_creation.php';
 
     <main>
         <div class="container mt-5">
-            <h2 class="mb-4"><?= t('Minhas Faturas') ?></h2>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+
+                <h2 class="mb-4"><?= t('Minhas Faturas') ?></h2>
+                <button type="button" class="custom-dropdown-btn" id="exportMenuBtn">
+                    Exportar
+                </button>
+            </div>
+
+            <!-- <section id="invoiceCollectionFeature" aria-labelledby="invoiceCollectionTitle"
+                data-company-id="<?= (int)($_SESSION['user']['company_id'] ?? 0) ?>">
+                <div>
+                    <h3 id="invoiceCollectionTitle"><i class="bi bi-stars me-2"></i>Nova cobrança inteligente BXpert</h3>
+                    <p>Analise faturas pendentes e execute os alertas pelos canais definidos nas regras de cobrança.</p>
+                    <div class="collection-summary" id="invoiceCollectionSummary">A carregar regras de alerta...</div>
+                </div>
+                <button type="button" class="btn btn-light btn-sm" id="invoiceCollectionBtn">
+                    <i class="bi bi-send-check me-1"></i> Executar cobrança
+                </button>
+            </section> -->
+
+            <hr style="opacity: .15;">
+
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div class="custom-dropdown" id="exportMenu">
+                    <div class="custom-dropdown-menu" id="exportMenuList">
+
+                        <div class="custom-dropdown-item has-submenu" id="exportInvoiceToggle">
+                            <span>Fatura</span>
+                            <div class="custom-submenu">
+                                <div class="custom-dropdown-item" data-export="invoices" data-format="excel">Excel</div>
+                                <div class="custom-dropdown-item" data-export="invoices" data-format="pdf">PDF</div>
+                                <div class="custom-dropdown-item" data-export="invoices" data-format="csv">CSV</div>
+                            </div>
+                            <!-- <button type="button" class="btn btn-dark rounded-pill px-3" id="openCollectionModalBtn">
+                                <i class="bi bi-send-check me-1"></i> Cobrar faturas
+                            </button> -->
+                        </div>
+
+                        <div class="custom-dropdown-divider"></div>
+
+                        <div class="custom-dropdown-item" data-export="credit_notes">Nota de Crédito</div>
+                        <div class="custom-dropdown-item" data-export="receipts">Recibos</div>
+                        <div class="custom-dropdown-item" data-export="debit_notes">Nota de Débito</div>
+
+                        <div class="custom-dropdown-divider"></div>
+
+                        <div class="custom-dropdown-item" data-export="sales_report">Relatório de Vendas</div>
+                        <div class="custom-dropdown-item" data-export="invoices_paid">Faturas Pagas</div>
+                        <div class="custom-dropdown-item" data-export="invoices_pending">Faturas Pendentes</div>
+
+                    </div>
+                </div>
+            </div>
 
             <section id="invoiceInsights" aria-label="Insights dos documentos">
                 <div class="insight-section-title">Visão geral dos documentos</div>
@@ -427,7 +530,7 @@ require_once '../app/views/layout_creation.php';
                     </article>
                 </div>
 
-                <div class="insight-section-title mt-4">Status das faturas</div>
+                <!-- <div class="insight-section-title mt-4">Status das faturas</div>
                 <div class="status-grid">
                     <article class="insight-card status-card status-card--pending"><div class="insight-card__top"><span>Pendentes</span><i class="bi bi-hourglass-split"></i></div><div class="insight-card__value" id="insightPending">0</div></article>
                     <article class="insight-card status-card status-card--cancelled"><div class="insight-card__top"><span>Canceladas</span><i class="bi bi-x-circle"></i></div><div class="insight-card__value" id="insightCancelled">0</div></article>
@@ -436,56 +539,8 @@ require_once '../app/views/layout_creation.php';
                     <article class="insight-card status-card status-card--draft"><div class="insight-card__top"><span>Rascunhos</span><i class="bi bi-pencil-square"></i></div><div class="insight-card__value" id="insightDraft">0</div></article>
                     <article class="insight-card status-card status-card--overdue"><div class="insight-card__top"><span>Vencidas</span><i class="bi bi-exclamation-circle"></i></div><div class="insight-card__value" id="insightOverdue">0</div></article>
                     <article class="insight-card status-card status-card--expected"><div class="insight-card__top"><span>Volume esperado</span><span class="insight-card__icon"><i class="bi bi-graph-up-arrow"></i></span></div><div class="insight-card__value" id="insightExpected">0</div><div class="insight-card__hint">Total das faturas pagas</div></article>
-                </div>
+                </div> -->
             </section>
-
-            <section id="invoiceCollectionFeature" aria-labelledby="invoiceCollectionTitle"
-                data-company-id="<?= (int)($_SESSION['user']['company_id'] ?? 0) ?>">
-                <div>
-                    <h3 id="invoiceCollectionTitle"><i class="bi bi-stars me-2"></i>Nova cobrança inteligente BXpert</h3>
-                    <p>Analise faturas pendentes e execute os alertas pelos canais definidos nas regras de cobrança.</p>
-                    <div class="collection-summary" id="invoiceCollectionSummary">A carregar regras de alerta...</div>
-                </div>
-                <button type="button" class="btn btn-light btn-sm" id="invoiceCollectionBtn">
-                    <i class="bi bi-send-check me-1"></i> Executar cobrança
-                </button>
-            </section>
-
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <div class="custom-dropdown" id="exportMenu">
-                    <button type="button" class="custom-dropdown-btn" id="exportMenuBtn">
-                        Exportar
-                    </button>
-
-                    <div class="custom-dropdown-menu" id="exportMenuList">
-
-                        <div class="custom-dropdown-item has-submenu" id="exportInvoiceToggle">
-                            <span>Fatura</span>
-                            <div class="custom-submenu">
-                                <div class="custom-dropdown-item" data-export="invoices" data-format="excel">Excel</div>
-                                <div class="custom-dropdown-item" data-export="invoices" data-format="pdf">PDF</div>
-                                <div class="custom-dropdown-item" data-export="invoices" data-format="csv">CSV</div>
-                            </div>
-                            <button type="button" class="btn btn-dark rounded-pill px-3" id="openCollectionModalBtn">
-                                <i class="bi bi-send-check me-1"></i> Cobrar faturas
-                            </button>
-                        </div>
-
-                        <div class="custom-dropdown-divider"></div>
-
-                        <div class="custom-dropdown-item" data-export="credit_notes">Nota de Crédito</div>
-                        <div class="custom-dropdown-item" data-export="receipts">Recibos</div>
-                        <div class="custom-dropdown-item" data-export="debit_notes">Nota de Débito</div>
-
-                        <div class="custom-dropdown-divider"></div>
-
-                        <div class="custom-dropdown-item" data-export="sales_report">Relatório de Vendas</div>
-                        <div class="custom-dropdown-item" data-export="invoices_paid">Faturas Pagas</div>
-                        <div class="custom-dropdown-item" data-export="invoices_pending">Faturas Pendentes</div>
-
-                    </div>
-                </div>
-            </div>
 
             <!-- FILTROS -->
             <div class="card border-0 mb-4" style="background: none !important;">
@@ -567,7 +622,7 @@ require_once '../app/views/layout_creation.php';
         <div id="fatura-container" class="d-none"></div>
     </main>
 
-    <div class="modal fade" id="collectionModal" tabindex="-1" aria-labelledby="collectionModalTitle" aria-hidden="true">
+    <!-- <div class="modal fade" id="collectionModal" tabindex="-1" aria-labelledby="collectionModalTitle" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
@@ -618,7 +673,7 @@ require_once '../app/views/layout_creation.php';
                 </form>
             </div>
         </div>
-    </div>
+    </div> -->
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {

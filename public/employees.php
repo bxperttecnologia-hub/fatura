@@ -25,8 +25,6 @@ try {
 require_once '../app/views/layout_creation.php';
 ?>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
 <style>
     /* ===== TABELA ESTILO ===== */
     #employeesTable {
@@ -450,7 +448,7 @@ require_once '../app/views/layout_creation.php';
 
                                 <div class="col-md-6 mt-3">
                                     <label>Tipo de vínculo</label>
-                                    <select type="text" name="contract_type" class="form-select">
+                                    <select type="text" name="contract_type" class="form-select contract-type-select">
                                         <option selected>Selecione o tipo</option>
                                         <option value="efetivo">Efetivo</option>
                                         <option value="atermo">A Termo</option>
@@ -460,6 +458,11 @@ require_once '../app/views/layout_creation.php';
                                 <div class="col-md-6 mt-3">
                                     <label>Data de Admissão</label>
                                     <input type="date" name="admission_date" class="form-control">
+                                </div>
+
+                                <div class="col-md-6 mt-3 end-date-field" style="display:none;">
+                                    <label>Data de Término</label>
+                                    <input type="date" name="end_date" class="form-control">
                                 </div>
                             </div>
                         </div>
@@ -636,7 +639,7 @@ require_once '../app/views/layout_creation.php';
 
                                         <div class="col-12 col-md-6 mb-3">
                                             <label>Tipo de vínculo</label>
-                                            <select type="text" name="contract_type" class="form-select">
+                                            <select type="text" name="contract_type" class="form-select contract-type-select">
                                                 <option selected>Selecione o tipo</option>
                                                 <option value="efetivo">Efetivo</option>
                                                 <option value="atermo">A Termo</option>
@@ -646,6 +649,11 @@ require_once '../app/views/layout_creation.php';
                                         <div class="col-12 col-md-6 mb-3">
                                             <label>Data de Admissão</label>
                                             <input type="date" name="admission_date" class="form-control">
+                                        </div>
+
+                                        <div class="col-12 col-md-6 mb-3 end-date-field" style="display:none;">
+                                            <label>Data de Término</label>
+                                            <input type="date" name="end_date" class="form-control">
                                         </div>
                                     </div>
                                 </div>
@@ -865,6 +873,7 @@ require_once '../app/views/layout_creation.php';
                         data-birth_date='${row.birth_date}'
                         data-contract_type='${row.contract_type}'
                         data-admission_date='${row.admission_date}'
+                        data-end_date='${row.end_date || ''}'
                         data-iban='${row.iban}'
                         data-marital_status='${row.marital_status || ''}'
                         data-academic_level='${row.academic_level || ''}'
@@ -1025,6 +1034,8 @@ require_once '../app/views/layout_creation.php';
             form.find('[name=birth_date]').val(get('birth_date'));
             form.find('[name=contract_type]').val(get('contract_type'));
             form.find('[name=admission_date]').val(get('admission_date'));
+            form.find('[name=end_date]').val(get('end_date'));
+            toggleEndDateField(form.find('.contract-type-select'));
             form.find('[name=iban]').val(get('iban'));
             form.find('[name=position]').val(get('position'));
             form.find('[name=marital_status]').val(get('marital_status'));
@@ -1168,6 +1179,25 @@ require_once '../app/views/layout_creation.php';
             });
         });
     }
+
+    // =========================
+    // TOGGLE: Data de Término (só para vínculo "A Termo")
+    // =========================
+    function toggleEndDateField($select) {
+        const $wrapper = $select.closest('.row, .modal-body').find('.end-date-field');
+        const $input = $wrapper.find('[name=end_date]');
+
+        if ($select.val() === 'atermo') {
+            $wrapper.show();
+        } else {
+            $wrapper.hide();
+            $input.val('');
+        }
+    }
+
+    $(document).on('change', '.contract-type-select', function() {
+        toggleEndDateField($(this));
+    });
 
     $(document).ready(function() {
 

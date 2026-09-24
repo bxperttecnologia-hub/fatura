@@ -44,10 +44,6 @@ try {
         $contactId = (int)$fatura['contact_id'];
     } else {
 
-        if (empty($fatura['name']) || empty($fatura['email'])) {
-            throw new Exception('Nome e e-mail do contato são obrigatórios.');
-        }
-
         $stmt = $pdo->prepare("SELECT id FROM contact WHERE email = ? AND company_id = ?");
         $stmt->execute([$fatura['email'], $companyIdSession]);
 

@@ -106,6 +106,82 @@ require_once '../app/views/layout_creation.php';
         border-color: #512d91;
         color: #fff;
     }
+
+    /* ===== Pré-visualizar e imprimir ===== */
+    .pp-label {
+        font-size: .75rem;
+        font-weight: 700;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        color: #6b7280;
+        margin-bottom: .5rem;
+        display: block;
+    }
+
+    .pp-format {
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        padding: .75rem .9rem;
+        margin-bottom: .6rem;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: border-color .15s, background .15s;
+    }
+
+    .pp-format input {
+        display: none;
+    }
+
+    .pp-format small {
+        display: block;
+        color: #6b7280;
+        font-size: .75rem;
+    }
+
+    .pp-format:has(input:checked) {
+        border-color: #007abd;
+        background: #eef7fc;
+    }
+
+    .pp-format:has(input:checked) .material-icons-outlined {
+        color: #007abd;
+    }
+
+    .pp-stage {
+        position: relative;
+        height: 70vh;
+        background: #525659;
+    }
+
+    .pp-stage iframe {
+        width: 100%;
+        height: 100%;
+        border: 0;
+        display: block;
+    }
+
+    .pp-overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: .75rem;
+        padding: 1.5rem;
+        text-align: center;
+        color: #fff;
+        background: rgba(60, 63, 65, .92);
+    }
+
+    @media (max-width: 991.98px) {
+        .pp-stage {
+            height: 60vh;
+        }
+    }
 </style>
 
 <main>
@@ -153,10 +229,13 @@ require_once '../app/views/layout_creation.php';
 
             <!-- grupo Documento -->
 
-            <button class="d-none btn text-center d-none align-items-center align-content-center btn-primary w-100 mb-2" id="generatePdf">
-                <span class="material-icons-outlined">picture_as_pdf</span>
-                Baixar PDF
-            </button>
+            <div class="d-none w-100 mb-2" id="generatePdf">
+                <button class="btn btn-primary w-100 text-center" type="button" id="btnFormatoImpressao"
+                    data-bs-toggle="modal" data-bs-target="#modalPrintPreview">
+                    <span class="material-icons-outlined align-middle">print</span>
+                    Imprimir / Baixar
+                </button>
+            </div>
 
             <button class="d-none btn text-center d-none align-items-center align-content-center btn-info text-white w-100 mb-2" id="btnEnviar"
                 data-bs-toggle="modal" data-bs-target="#modalEnviarEmail">
@@ -457,9 +536,85 @@ require_once '../app/views/layout_creation.php';
             </form>
         </div>
     </div>
+    <!-- ===== PRÉ-VISUALIZAR E IMPRIMIR ===== -->
+    <div class="modal fade" id="modalPrintPreview" tabindex="-1" aria-labelledby="printPreviewTitle" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="printPreviewTitle">
+                        <span class="material-icons-outlined align-middle me-1">print</span>
+                        Pré-visualizar e imprimir
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+
+                <div class="modal-body p-0">
+                    <div class="row g-0">
+                        <!-- Escolha do formato -->
+                        <div class="col-lg-4 p-3 border-end">
+                            <p class="pp-label">Formato</p>
+
+                            <label class="pp-format">
+                                <input type="radio" name="pp_format" value="a4" checked>
+                                <span class="material-icons-outlined">description</span>
+                                <span>
+                                    <strong>Fatura A4</strong>
+                                    <small>PDF em folha A4, com Original e Duplicado</small>
+                                </span>
+                            </label>
+
+                            <label class="pp-format">
+                                <input type="radio" name="pp_format" value="thermal">
+                                <span class="material-icons-outlined">receipt_long</span>
+                                <span>
+                                    <strong>Talão térmico</strong>
+                                    <small>Rolo de 80mm (impressora POS)</small>
+                                </span>
+                            </label>
+
+                            <div id="ppCopiesBox" class="mt-3">
+                                <label class="pp-label" for="ppCopies">Nº de vias</label>
+                                <select id="ppCopies" class="form-select">
+                                    <option value="1">1 via</option>
+                                    <option value="2" selected>2 vias (Original + Duplicado)</option>
+                                    <option value="3">3 vias</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Pré-visualização -->
+                        <div class="col-lg-8 pp-stage">
+                            <div id="ppLoading" class="pp-overlay">
+                                <div class="spinner-border text-light" role="status" aria-hidden="true"></div>
+                                <span>A preparar a pré-visualização...</span>
+                            </div>
+                            <div id="ppError" class="pp-overlay d-none">
+                                <span class="material-icons-outlined">error_outline</span>
+                                <span id="ppErrorText"></span>
+                                <button type="button" class="btn btn-light btn-sm" id="ppRetry">Tentar novamente</button>
+                            </div>
+                            <iframe id="ppFrame" title="Pré-visualização do documento"></iframe>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Fechar</button>
+                    <button type="button" class="btn btn-outline-primary" id="ppDownload" disabled>
+                        <span class="material-icons-outlined align-middle" style="font-size:18px;">download</span>
+                        Baixar PDF
+                    </button>
+                    <button type="button" class="btn btn-primary" id="ppPrint" disabled>
+                        <span class="material-icons-outlined align-middle" style="font-size:18px;">print</span>
+                        Imprimir
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 </main>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="invoices/invoice.js?v=4.7"></script>
+<script src="invoices/invoice.js?v=4.8"></script>
 
 <?php require_once '../app/views/footer.php'; ?>
