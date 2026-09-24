@@ -1,379 +1,1185 @@
 <?php
 require_once '../app/views/layout_creation.php';
+
+/*
+ * Ajusta aqui as rotas e o tema do ecrã.
+ * $invTheme: 'dark' (igual à captura) ou 'light'.
+ */
+$homeUrl       = 'index.php';
+$listUrl       = 'invoices.php';
+$invTheme      = 'dark';
+$retentionRate = 6.5; // % aplicada pela caixa "Aplicar Retenção na Fonte"
 ?>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
-<link rel="stylesheet" href="create_invoices/create_invoices.css">
-<link href="assets/css/select2.min.css" rel="stylesheet" />
-<script src="assets/js/select2.min.js"></script>
+<style id="inv-styles">
+    /* =====================================================================
+   EMISSÃO DE DOCUMENTO — create_invoices.css
+   Tudo vive sob .inv-page e usa o prefixo .inv- para não colidir com o
+   Bootstrap nem com o resto da aplicação.
+   Cores e raios estão nos tokens abaixo: muda-os aqui e o ecrã inteiro segue.
+   Para o tema claro, adiciona a classe .inv-page--light ao <main>.
+   ===================================================================== */
 
-<style>
-    /* ===== STEPPER ===== */
-    .stepper {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 20px;
+    .inv-page {
+        --inv-bg: #fff;
+        --inv-card: #fff;
+        --inv-card-border: #3030301e;
+        --inv-head: #0d8bdc;
+        --inv-field: #fff;
+        --inv-field-border: #3030301e;
+        --inv-text: #000;
+        --inv-muted: #8593ad;
+        --inv-primary: #0d8bdc;
+        --inv-primary-hover: #26a0ee;
+        --inv-danger: #ef5b6b;
+        --inv-radius-card: 24px;
+        --inv-radius: 12px;
+
+        color-scheme: dark;
+        background: var(--inv-bg);
+        color: var(--inv-text);
+        padding: 3rem 0 4rem;
+        min-height: 100vh;
     }
 
-    .step {
-        flex: 1;
+    .inv-page--light {
+        --inv-bg: #f3f6fb;
+        --inv-card: #ffffff;
+        --inv-card-border: #e2e8f2;
+        --inv-head: #eef2f9;
+        --inv-field: #f0f3f9;
+        --inv-field-border: #dfe6f1;
+        --inv-text: #000;
+        --inv-muted: #66738e;
+        --inv-primary: #0a7fc9;
+        --inv-primary-hover: #0b6fb0;
+        color-scheme: light;
+    }
+
+    .inv-page *,
+    .inv-page *::before,
+    .inv-page *::after {
+        box-sizing: border-box;
+    }
+
+    .inv-page :focus-visible {
+        outline: 2px solid var(--inv-primary);
+        outline-offset: 2px;
+    }
+
+    /* ---------- Topo: navegação + acções ---------- */
+
+    .inv-top {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 1rem 2rem;
+        margin-bottom: 2rem;
+    }
+
+    .inv-breadcrumb {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.6rem;
+        margin-bottom: 1.4rem;
+        color: var(--inv-muted);
+        font-size: 0.95rem;
+    }
+
+    .inv-breadcrumb a,
+    .inv-back {
+        color: var(--inv-muted);
+        text-decoration: none;
+    }
+
+    #cancelInvoiceBtn {
+        background: #ef5b6b;
+        color: #fff;
+    }
+
+    .inv-breadcrumb a:hover,
+    .inv-back:hover {
+        color: var(--inv-text);
+    }
+
+    .inv-breadcrumb [aria-current="page"] {
+        color: var(--inv-text);
+        font-weight: 600;
+    }
+
+    .inv-breadcrumb .bi-chevron-right {
+        font-size: 0.7rem;
+    }
+
+    .inv-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.6rem;
+        font-size: 0.95rem;
+    }
+
+    .inv-top-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.9rem;
+    }
+
+    /* ---------- Botões ---------- */
+
+    .inv-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.6rem;
+        height: 46px;
+        padding: 0 1.4rem;
+        border: 1px solid transparent;
+        border-radius: var(--inv-radius);
+        font: inherit;
+        font-size: 1rem;
+        font-weight: 600;
+        line-height: 1;
+        cursor: pointer;
+        transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+
+    .inv-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .inv-btn-primary {
+        background: var(--inv-primary);
+        color: #fff;
+    }
+
+    .inv-btn-primary:hover:not(:disabled) {
+        background: var(--inv-primary-hover);
+    }
+
+    .inv-btn-dark {
+        background: var(--inv-field);
+        color: var(--inv-text);
+    }
+
+    .inv-btn-dark:hover {
+        border-color: var(--inv-muted);
+    }
+
+    .inv-btn-ghost {
+        height: 38px;
+        padding: 0 1rem;
+        background: transparent;
+        border-color: var(--inv-field-border);
+        color: var(--inv-text);
+        font-size: 0.9rem;
+    }
+
+    .inv-btn-ghost:hover {
+        border-color: var(--inv-primary);
+        color: var(--inv-primary-hover);
+    }
+
+    /* ---------- Cartões ---------- */
+
+    .inv-card {
+        margin-bottom: 1.75rem;
+        padding: 2rem;
+        background: var(--inv-card);
+        border: 1px solid var(--inv-card-border);
+        border-radius: var(--inv-radius-card);
+    }
+
+    .inv-card-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .inv-card-title {
+        margin: 0;
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: var(--inv-text);
+    }
+
+    .inv-card>.inv-card-title {
+        margin-bottom: 1.5rem;
+    }
+
+    .inv-card-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+
+    .inv-count {
+        display: inline-block;
+        min-width: 1.6rem;
+        margin-left: 0.5rem;
+        padding: 0.1rem 0.5rem;
+        background: var(--inv-field);
+        border-radius: 999px;
+        color: var(--inv-muted);
+        font-size: 0.8rem;
+        font-weight: 600;
+        text-align: center;
+        vertical-align: middle;
+    }
+
+    /* ---------- Campos ---------- */
+
+    .inv-grid-4 {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 1.25rem;
+    }
+
+    .inv-field {
+        min-width: 0;
+    }
+
+    .inv-label {
+        display: block;
+        margin-bottom: 0.5rem;
+        color: var(--inv-text);
+        font-size: 0.88rem;
+        font-weight: 600;
+    }
+
+    .inv-input,
+    .inv-select {
+        display: block;
+        width: 100%;
+        height: 44px;
+        padding: 0 1rem;
+        background: var(--inv-field);
+        border: 1px solid var(--inv-field-border);
+        border-radius: var(--inv-radius);
+        color: var(--inv-text);
+        font: inherit;
+        font-size: 0.92rem;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .inv-select-btn {
+        width: 100%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        /* flex: 0 0 44px; */
+        height: 44px;
+        background: var(--inv-field);
+        border: 1px solid var(--inv-field-border);
+        border-radius: var(--inv-radius);
+        color: var(--inv-primary-hover);
+        text-decoration: none;
+    }
+
+    .inv-select-btn:hover {
+        border-color: var(--inv-primary);
+        color: var(--inv-bg);
+        background: #0a7fc9;
+    }
+
+    .inv-input:focus,
+    .inv-select:focus {
+        border-color: var(--inv-primary);
+        box-shadow: 0 0 0 3px rgba(13, 139, 220, 0.25);
+        outline: none;
+    }
+
+    .inv-input[readonly] {
+        color: var(--inv-muted);
+    }
+
+    .inv-select {
+        appearance: none;
+        padding-right: 2.5rem;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%238593ad' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 1rem center;
+    }
+
+    .inv-textarea {
+        height: auto;
+        min-height: 118px;
+        padding: 0.8rem 1rem;
+        resize: vertical;
+    }
+
+    .inv-with-action {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .inv-with-action>select {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .inv-icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 44px;
+        height: 44px;
+        background: var(--inv-field);
+        border: 1px solid var(--inv-field-border);
+        border-radius: var(--inv-radius);
+        color: var(--inv-primary-hover);
+        text-decoration: none;
+    }
+
+    .inv-icon-btn:hover {
+        border-color: var(--inv-primary);
+    }
+
+    .inv-divider {
+        height: 0;
+        margin: 1.5rem 0 1.25rem;
+        border: 0;
+        border-top: 1px solid var(--inv-card-border);
+    }
+
+    .inv-terms {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem 2rem;
+    }
+
+    .inv-check {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin: 0;
+        color: var(--inv-text);
+        font-size: 0.92rem;
+        cursor: pointer;
+    }
+
+    .inv-check input {
+        width: 18px;
+        height: 18px;
+        margin: 0;
+        accent-color: var(--inv-primary);
+    }
+
+    .inv-chips {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--inv-muted);
+        font-size: 0.88rem;
+    }
+
+    .inv-chip {
+        height: 34px;
+        padding: 0 0.95rem;
+        background: transparent;
+        border: 1px solid var(--inv-field-border);
+        border-radius: 999px;
+        color: var(--inv-muted);
+        font: inherit;
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+    }
+
+    .inv-chip:hover {
+        color: var(--inv-text);
+    }
+
+    .inv-chip.active {
+        background: rgba(13, 139, 220, 0.15);
+        border-color: var(--inv-primary);
+        color: var(--inv-text);
+    }
+
+    .inv-fx {
+        max-width: 260px;
+        margin-top: 1.25rem;
+    }
+
+    /* ---------- Ficha do cliente (só leitura) ---------- */
+
+    .inv-client {
+        margin-top: 1.5rem;
+        padding: 1.25rem 1.5rem;
+        background: rgba(127, 145, 180, 0.05);
+        border: 1px dashed var(--inv-field-border);
+        border-radius: 16px;
+    }
+
+    .inv-client-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 1rem 1.5rem;
+    }
+
+    .inv-client-grid .inv-field-wide {
+        grid-column: 1 / -1;
+    }
+
+    .inv-client .inv-label {
+        margin-bottom: 0.25rem;
+        color: var(--inv-muted);
+        font-size: 0.78rem;
+        font-weight: 500;
+    }
+
+    .inv-client .inv-input {
+        height: 34px;
+        padding: 0;
+        background: transparent;
+        border-color: transparent;
+        box-shadow: none;
+    }
+
+    .inv-client textarea.inv-input {
+        height: 52px;
+        min-height: 0;
+        padding: 0;
+        resize: none;
+    }
+
+    .inv-client .inv-input:disabled {
+        color: var(--inv-text);
+        -webkit-text-fill-color: var(--inv-text);
+        opacity: 1;
+    }
+
+    /* ---------- Linhas do documento ---------- */
+
+    .inv-lines-head,
+    .inv-line {
+        display: grid;
+        grid-template-columns: minmax(220px, 1fr) 84px 140px 92px 96px 150px 44px;
+        gap: 0.75rem;
+        align-items: center;
+    }
+
+    .inv-lines-head {
+        display: none;
+        padding: 0.9rem 1rem;
+        background: var(--inv-head);
+        border-radius: var(--inv-radius);
+        color: #fff;
+        font-size: 0.85rem;
+        font-weight: 700;
+    }
+
+    .inv-lines-head>div:not(:first-child) {
         text-align: center;
     }
 
-    .step .circle {
-        width: 35px;
-        height: 35px;
-        border-radius: 50%;
-        background: #dee2e6;
+    .has-lines .inv-lines-head {
+        display: grid;
+    }
+
+    .inv-line {
+        padding: 0.85rem 1rem;
+        border-bottom: 1px solid var(--inv-card-border);
+    }
+
+    .inv-cell {
+        min-width: 0;
+    }
+
+    .inv-cell-desc {
         display: flex;
-        align-items: center;
-        justify-content: center;
+        flex-direction: column;
+        gap: 0.2rem;
     }
 
-    .step.active .circle {
-        background: #0d6efd;
-        color: #fff;
-    }
-
-    .step.completed .circle {
-        background: #198754;
-        color: #fff;
-    }
-
-    /* ===== STEPS ===== */
-    .form-step {
-        display: none;
-        opacity: 0;
-        transform: translateX(30px);
-        transition: all .3s;
-    }
-
-    .form-step.active {
-        display: block;
-        opacity: 1;
-        transform: translateX(0);
-    }
-
-    /* ===== STEP UI ===== */
-
-    .step-contentC {
-        display: none;
-        animation: fadeSlide .3s ease;
-    }
-
-    .step-contentC.active {
-        display: block;
-    }
-
-    @keyframes fadeSlide {
-        from {
-            opacity: 0;
-            transform: translateX(15px);
-        }
-
-        to {
-            opacity: 1;
-            transform: translateX(0);
-        }
-    }
-
-    /* Progress */
-    .stepC-progress {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 20px;
-        position: relative;
-    }
-
-    .stepC-progress::before {
-        content: '';
-        position: absolute;
-        top: 50%;
+    .inv-line-desc {
         width: 100%;
-        height: 3px;
-        background: #e5e7eb;
-        transform: translateY(-50%);
+        padding: 0;
+        background: transparent;
+        border: 0;
+        color: var(--inv-text);
+        font: inherit;
+        font-size: 0.95rem;
+        font-weight: 600;
+        text-overflow: ellipsis;
     }
 
-    .stepC-bar {
-        position: absolute;
-        top: 50%;
-        height: 3px;
-        background: #007abd;
-        width: 0%;
-        transform: translateY(-50%);
-        transition: .4s;
+    .inv-line-meta {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
     }
 
-    .stepC {
-        z-index: 2;
-        background: white;
-        border: 2px solid #e5e7eb;
-        width: 38px;
+    .inv-line-code {
+        width: 8.5rem;
+        max-width: 100%;
+        padding: 0;
+        background: transparent;
+        border: 0;
+        color: var(--inv-muted);
+        font: inherit;
+        font-size: 0.78rem;
+    }
+
+    .inv-tag {
+        padding: 0.05rem 0.55rem;
+        background: rgba(13, 139, 220, 0.15);
+        border-radius: 999px;
+        color: var(--inv-primary-hover);
+        font-size: 0.72rem;
+        font-weight: 600;
+    }
+
+    .inv-cell-input {
+        display: block;
+        width: 100%;
         height: 38px;
-        border-radius: 50%;
+        padding: 0 0.5rem;
+        background: var(--inv-field);
+        border: 1px solid transparent;
+        border-radius: 10px;
+        color: var(--inv-text);
+        font: inherit;
+        font-size: 0.9rem;
+        font-variant-numeric: tabular-nums;
+        text-align: center;
+        -moz-appearance: textfield;
+    }
+
+    .inv-cell-input::-webkit-outer-spin-button,
+    .inv-cell-input::-webkit-inner-spin-button {
+        margin: 0;
+        -webkit-appearance: none;
+    }
+
+    .inv-cell-input:focus {
+        border-color: var(--inv-primary);
+        outline: none;
+    }
+
+    .inv-pill {
         display: flex;
         align-items: center;
         justify-content: center;
+        height: 38px;
+        background: var(--inv-field);
+        border-radius: 10px;
+        color: var(--inv-text);
+        font-size: 0.9rem;
     }
 
-    .stepC.active {
-        background: #007abd;
-        color: white;
-        border-color: #007abd;
+    .inv-pill input {
+        width: 2.4ch;
+        padding: 0;
+        background: transparent;
+        border: 0;
+        color: inherit;
+        font: inherit;
+        text-align: right;
+        -moz-appearance: textfield;
     }
 
-    /* Aside fixo */
-    .sticky-aside {
-        position: sticky;
-        top: 20px;
+    .inv-pill input::-webkit-outer-spin-button,
+    .inv-pill input::-webkit-inner-spin-button {
+        margin: 0;
+        -webkit-appearance: none;
     }
 
-    /* Buttons */
-    .stepC-actions {
-        display: flex;
-        justify-content: space-between;
-        margin-top: 30px;
+    .inv-cell-total {
+        color: var(--inv-text);
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+        white-space: nowrap;
     }
 
-    .btn-step {
-        border: none;
-        padding: 10px 20px;
+    .inv-trash {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        background: transparent;
+        border: 0;
         border-radius: 8px;
+        color: var(--inv-muted);
+        cursor: pointer;
     }
 
-    .btn-next {
-        background: #007abd;
-        color: white;
+    .inv-trash:hover {
+        background: rgba(239, 91, 107, 0.12);
+        color: var(--inv-danger);
     }
 
-    .btn-prev {
-        background: #e5e7eb;
+    .inv-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 2.25rem 1rem 1.5rem;
+        color: var(--inv-muted);
+        font-size: 0.92rem;
+        text-align: center;
     }
 
-    #aside input,
-    #aside select {
-        padding: 5px 5px !important;
+    .inv-empty .bi {
+        font-size: 1.6rem;
     }
 
-    #aside textarea {
-        height: 60px !important;
+    .has-lines .inv-empty {
+        display: none;
     }
 
-    .row-total {
-        font-size: 10pt !important;
+    .inv-picker {
+        margin-top: 1rem;
+        padding: 1rem 1.25rem 1.25rem;
+        border: 1px dashed var(--inv-field-border);
+        border-radius: 16px;
+    }
+
+    /* ---------- Rodapé: observações + resumo ---------- */
+
+    .inv-footer {
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+        gap: 2rem;
+        margin-top: 1.75rem;
+        padding-top: 1.75rem;
+        border-top: 1px solid var(--inv-card-border);
+    }
+
+    .inv-tax-wrap {
+        margin-top: 1.25rem;
+        overflow-x: auto;
+    }
+
+    .inv-tax-title {
+        margin: 0 0 0.5rem;
+        color: var(--inv-muted);
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    .inv-tax {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.82rem;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .inv-tax th,
+    .inv-tax td {
+        padding: 0.5rem 0.6rem;
+        border-bottom: 1px solid var(--inv-card-border);
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .inv-tax th {
+        color: #fff;
+        font-weight: 600;
+    }
+
+    .inv-tax th:first-child,
+    .inv-tax td:first-child {
+        text-align: left;
+    }
+
+    .inv-tax td {
+        color: #fff;
+    }
+
+    .inv-tax td.inv-tax-empty {
+        color: var(--inv-muted);
+        text-align: center;
+    }
+
+    .inv-summary {
+        align-self: start;
+        padding: 1.25rem 1.5rem;
+        background: rgba(127, 145, 180, 0.05);
+        border: 1px solid var(--inv-card-border);
+        border-radius: 18px;
+    }
+
+    .inv-sum-row {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.35rem 0;
+        color: var(--inv-muted);
+        font-size: 0.92rem;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .inv-sum-row.d-none {
+        display: none;
+    }
+
+    .inv-sum-total {
+        margin-top: 0.7rem;
+        padding-top: 0.95rem;
+        border-top: 1px solid var(--inv-card-border);
+        color: var(--inv-text);
+        font-size: 1.25rem;
+        font-weight: 700;
+    }
+
+    /* ---------- Select2 (o dropdown vive dentro de #invPage) ---------- */
+
+    .inv-page .select2-container {
+        width: 100% !important;
+    }
+
+    .inv-page .select2-container--default .select2-selection--single {
+        display: flex;
+        align-items: center;
+        height: 44px;
+        background: var(--inv-field);
+        border: 1px solid var(--inv-field-border);
+        border-radius: var(--inv-radius);
+    }
+
+    .inv-page .select2-container--default .select2-selection--single .select2-selection__rendered {
+        width: 100%;
+        padding: 0 2.5rem 0 1rem;
+        color: var(--inv-text);
+        font-size: 0.92rem;
+        line-height: 44px;
+    }
+
+    .inv-page .select2-container--default .select2-selection--single .select2-selection__arrow {
+        right: 0.75rem;
+        height: 44px;
+    }
+
+    .inv-page .select2-container--default .select2-selection--single .select2-selection__arrow b {
+        border-color: var(--inv-muted) transparent transparent transparent;
+    }
+
+    .inv-page .select2-container--default.select2-container--open .select2-selection--single,
+    .inv-page .select2-container--default.select2-container--focus .select2-selection--single {
+        border-color: var(--inv-primary);
+    }
+
+    .inv-page .select2-container--default.select2-container--disabled .select2-selection--single {
+        background: transparent;
+        border-color: transparent;
+        cursor: default;
+    }
+
+    .inv-page .select2-container--default.select2-container--disabled .select2-selection__arrow {
+        display: none;
+    }
+
+    .inv-page .select2-container--default.select2-container--disabled .select2-selection__rendered {
+        padding: 0;
+        color: var(--inv-text);
+    }
+
+    .inv-page .select2-dropdown {
+        overflow: hidden;
+        background: var(--inv-card);
+        border: 1px solid var(--inv-card-border);
+        border-radius: var(--inv-radius);
+        color: var(--inv-text);
+    }
+
+    .inv-page .select2-container--default .select2-search--dropdown .select2-search__field {
+        height: 38px;
+        padding: 0 0.75rem;
+        background: var(--inv-field);
+        border: 1px solid var(--inv-field-border);
+        border-radius: 8px;
+        color: var(--inv-text);
+    }
+
+    .inv-page .select2-results__option {
+        padding: 0.6rem 1rem;
+        color: var(--inv-text);
+    }
+
+    .inv-page .select2-container--default .select2-results__option--highlighted {
+        background: var(--inv-primary);
+        color: #fff;
+    }
+
+    .inv-page .select2-container--default .select2-results__option[aria-selected="true"],
+    .inv-page .select2-container--default .select2-results__option--selected {
+        background: var(--inv-field);
+    }
+
+    /* ---------- Responsivo ---------- */
+
+    @media (max-width: 1199.98px) {
+        .inv-grid-4 {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .inv-footer {
+            grid-template-columns: minmax(0, 1fr);
+        }
+    }
+
+    @media (max-width: 991.98px) {
+        .inv-card {
+            padding: 1.4rem;
+        }
+
+        .inv-client-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        /* Linhas passam a cartões: cada célula mostra o seu rótulo */
+        .has-lines .inv-lines-head {
+            display: none;
+        }
+
+        .inv-line {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            margin-bottom: 0.75rem;
+            padding: 1rem;
+            border: 1px solid var(--inv-card-border);
+            border-radius: 16px;
+        }
+
+        .inv-cell[data-label]::before {
+            content: attr(data-label);
+            display: block;
+            margin-bottom: 0.25rem;
+            color: var(--inv-muted);
+            font-size: 0.75rem;
+        }
+
+        .inv-cell-desc,
+        .inv-cell-total {
+            grid-column: 1 / -1;
+        }
+
+        .inv-cell-desc::before {
+            display: none !important;
+        }
+
+        .inv-cell-act {
+            grid-column: 1 / -1;
+            justify-self: end;
+        }
+    }
+
+    @media (max-width: 575.98px) {
+
+        .inv-grid-4,
+        .inv-client-grid {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        .inv-top-actions,
+        .inv-top-actions .inv-btn {
+            width: 100%;
+        }
+
+        .inv-card-actions .inv-btn {
+            flex: 1 1 auto;
+        }
+    }
+
+    .inv-with-action .select2-container {
+        flex: 1 1 auto;
+        min-width: 0;
     }
 </style>
+<link href="assets/css/select2.min.css" rel="stylesheet" />
+<script src="assets/js/select2.min.js"></script>
 
-<main>
-    <div class="container mt-5">
-        <br><br>
-        <h2 class="text-left mb-4"><?= t('Emissão de Fatura') ?></h2>
+<main id="invPage" class="inv-page <?= $invTheme === 'light' ? 'inv-page--light' : '' ?>">
+    <div class="container">
 
-        <form id="formFatura" class="mt-5">
+        <form id="formFatura" autocomplete="off" novalidate>
 
-            <input type="hidden" value="<?= $_SESSION['user']['company_id'] ?>" id="id_company" name="id_company">
+            <!-- Campos técnicos (não visíveis) -->
+            <input type="hidden" id="id_company" name="id_company" value="<?= (int) $_SESSION['user']['company_id'] ?>">
+            <input type="hidden" id="company_id" name="company_id" value="<?= (int) $_SESSION['user']['company_id'] ?>">
+            <input type="hidden" id="user_id" name="user_id" value="<?= (int) $_SESSION['user']['id'] ?>">
             <input type="hidden" id="edit_invoice_id" name="edit_invoice_id" value="0">
+            <input type="hidden" id="contact_id" name="contact_id">
+            <input type="hidden" id="retention" name="retention" value="0.00">
+            <input type="hidden" id="due_date" name="due_date" value="0">
 
-            <!-- STEPPER -->
-            <div class="stepper">
-                <div class="step active d-flex align-items-center gap-4 fw-bold" data-step="1">
-                    <div class="circle">1</div><span>Cliente & Documentos</span>
-                </div>
-                <div class="step d-flex align-items-center gap-4 fw-bold" data-step="2">
-                    <div class="circle">2</div><span>Produtos & Serviços</span>
-                </div>
+            <input type="hidden" name="total_sum">
+            <input type="hidden" name="total_discount">
+            <input type="hidden" name="subtotal_without_tax">
+            <input type="hidden" name="total_tax">
+            <input type="hidden" name="retention_value">
+            <input type="hidden" name="final_total">
+
+            <div class="d-none">
+                <select id="currency" name="currency" required>
+                    <?= currencySelects(); ?>
+                </select>
             </div>
 
-            <!-- PROGRESS -->
-            <div class="progress mb-4" style="height:6px;">
-                <div id="progressBar" class="progress-bar" style="width:25%"></div>
-            </div>
+            <h1 class="visually-hidden"><?= t('Emissão de Fatura') ?></h1>
 
-            <div class="row">
-                <div class="col-lg-12">
+            <!-- ============ TOPO ============ -->
+            <div class="inv-top">
+                <div>
+                    <div class="inv-breadcrumb" role="navigation" aria-label="breadcrumb">
+                        <a href="<?= $homeUrl ?>"><i class="bi bi-house"></i> <?= t('Início') ?></a>
+                        <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                        <a href="<?= $listUrl ?>"><?= t('Facturação') ?></a>
+                        <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                        <span id="inv_crumb_current" aria-current="page"><?= t('Emitir Novo Documento') ?></span>
+                    </div>
+                    <a href="<?= $listUrl ?>" class="inv-back">
+                        <i class="bi bi-arrow-left" aria-hidden="true"></i> <?= t('Voltar à lista de facturas') ?>
+                    </a>
+                </div>
 
-                    <!-- STEP 1 -->
-                    <div class="form-step active" data-step="1">
+                <div class="inv-top-actions">
+                    <button type="button" id="cancelInvoiceBtn" class="inv-btn inv-btn-dark" data-href="<?= $listUrl ?>">
+                        <?= t('Cancelar') ?>
+                    </button>
+                    <button type="button" id="saveInvoiceBtn" class="inv-btn inv-btn-primary">
+                        <i class="bi bi-check2-circle" aria-hidden="true"></i>
+                        <span class="btn-label"><?= t('Emitir Fatura') ?></span>
+                    </button>
+                </div>
+            </div><!-- /inv-top -->
 
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h4 class="mb-0"><?= t('Dados do Cliente') ?></h4>
+            <!-- ============ DADOS DO DOCUMENTO & CLIENTE ============ -->
+            <div class="inv-card">
+                <h2 class="inv-card-title"><?= t('Dados do Documento & Cliente') ?></h2>
 
-                            <a href="register_contact.php"
-                                class="btn btn-success btn-sm rounded-pill px-3">
-                                <i class="bi bi-plus-circle"></i> Novo cliente
+                <div class="inv-grid-4">
+
+                    <!-- SÉRIE -->
+                    <div class="inv-field">
+                        <label class="inv-label" for="series">
+                            <?= t('Série') ?> *
+                        </label>
+
+                        <input
+                            type="text"
+                            class="inv-input"
+                            id="series"
+                            name="series"
+                            readonly>
+                    </div>
+
+
+                    <!-- CLIENTE -->
+                    <div class="inv-field">
+
+                        <label class="inv-label" for="contact-select">
+                            <?= t('Cliente Destinatário') ?> *
+                        </label>
+
+                        <div id="select-contact-container" class="inv-with-action">
+
+                            <!-- ID DO CLIENTE SELECIONADO -->
+                            <input
+                                type="hidden"
+                                id="contact_id"
+                                name="contact_id"
+                                value="">
+
+                            <!-- Campo usado pelo componente de seleção -->
+                            <input
+                                type="hidden"
+                                id="contact-select"
+                                value="">
+
+                            <!-- Abrir modal de seleção -->
+                            <a
+                                href="#"
+                                class="inv-select-btn"
+                                id="btn-select-contact"
+                                title="<?= t('Selecionar cliente') ?>"
+                                aria-label="<?= t('Selecionar cliente') ?>">
+                                <i class="bi bi-person" aria-hidden="true"></i>
+
+                                <span id="contact-select-label">
+                                    <?= t('Selecionar Cliente') ?>
+                                </span>
                             </a>
-                        </div>
 
-                        <hr>
-
-                        <div class="col-lg-12 bg-white shadow-sm p-3 rounded">
-                            <div id="select-contact-container">
-                                <label for="contact-select" class="form-label"><?= t('Escolha um Contato') ?>:</label>
-                                <select id="contact-select" class="form-select">
-                                    <option value=""><?= t('Selecione um contato...') ?></option>
-                                    <!-- Os contatos existentes serão carregados via JS -->
-                                </select>
-                            </div>
-
-                            <!-- Formulário de Cliente -->
-                            <div id="contact-form" class="d-none" style="display: none;">
-                                <input type="text" hidden readonly id="contact_id" name="contact_id">
-
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <div>
-                                            <label for="name" class="form-label"><?= t('Nome') ?>:</label>
-                                            <input type="text" class="form-control" id="contact_name" name="name" required>
-                                        </div>
-                                        <div class="mt-2">
-                                            <label for="contributor" class="form-label"><?= t('NIF') ?>:</label>
-                                            <input type="text" class="form-control" id="contributor" name="contributor" required>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label for="address" class="form-label"><?= t('Endereço') ?>:</label>
-                                        <textarea style="height: 7rem;" class="form-control" id="address" name="address" required></textarea>
-                                    </div>
-                                </div>
-
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label for="email" class="form-label"><?= t('Email') ?>:</label>
-                                        <input type="email" class="form-control" id="email" name="email" required>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label for="po_box" class="form-label"><?= t('Telefone') ?>:</label>
-                                        <input type="tel" class="form-control" id="po_box" name="po_box">
-                                    </div>
-                                </div>
-
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label for="country" class="form-label"><?= t('País') ?>:</label>
-                                        <select class="form-select" id="country" name="country">
-                                            <option value=""><?= t('Carregando países') ?>...</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label for="city" class="form-label"><?= t('Cidade') ?>: </label>
-                                        <select class="form-select" id="city" name="city">
-                                            <option value=""><?= t('Escolha um país primeiro') ?></option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-
-                        <h4 class="mt-5"><?= t('Detalhes do Documento') ?></h4>
-                        <hr>
-
-                        <div class="row mb-4 bg-white shadow-sm p-2 rounded">
-                            <input hidden readonly value="<?= $_SESSION['user']['company_id'] ?>" id="company_id" name="company_id" required>
-                            <input hidden readonly value="<?= $_SESSION['user']['id'] ?>" id="user_id" name="user_id" required>
-
-
-                            <div class="col-md-6 mb-3">
-                                <div>
-                                    <label for="issue_date" class="form-label"><?= t('Data') ?>:</label>
-                                    <input type="date" class="form-control" id="issue_date" name="issue_date" required value="<?= date('Y-m-d') ?>">
-                                </div>
-                                <div class="mt-2">
-                                    <label for="due_date" class="form-label"><?= t('Vencimento') ?>:</label>
-                                    <select class="form-select" name="due_date" id="due_date" required="" onchange="handleOtherOption()">
-                                        <option value="0" selected>Pronto Pagamento</option>
-                                        <option value="15">15 Dias</option>
-                                        <option value="30">30 Dias</option>
-                                        <option value="45">45 Dias</option>
-                                        <option value="60">60 Dias</option>
-                                        <option value="90">90 Dias</option>
-                                        <option value="other">Outro</option>
-                                    </select>
-                                </div>
-
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="observation" class="form-label"><?= t('Observações') ?>:</label>
-                                <textarea style="height: 11rem;" type="text" class="form-control" id="observation" name="observation"></textarea>
-                            </div>
-
-                            <div class="row" style="margin-top: -45px !important;">
-                                <div class="col-md-6 mb-3">
-                                    <label for="series" class="form-label"><?= t('Série') ?>:</label>
-                                    <input class="form-control" id="series" name="series" readonly>
-                                </div>
-
-                                <div class="col-md-6 mb-6 d-none" style="margin-top: 40px;">
-                                    <label for="retention" class="form-label"><?= t('Retenção') ?>: (%)</label>
-                                    <input type="number" value="0.00" step="0.01" class="form-control" id="retention" name="retention">
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-6 mb-3 d-none">
-                                <label for="currency" class="form-label"><?= t('Moeda') ?>:</label>
-                                <select class="form-select" id="currency" name="currency" required>
-                                    <?= currencySelects(); ?>
-                                </select>
-
-                            </div>
-
-                            <div class="col-md-6 mb-3" id="exchange_rate_container" style="display: none;">
-                                <label for="manual_exchange_rate" class="form-label"><?= t('Câmbio') ?>:</label>
-                                <input type="number" step="0.0001" class="form-control" id="manual_exchange_rate" name="manual_exchange_rate">
-                            </div>
+                            <!-- Novo cliente -->
+                            <a
+                                href="register_contact.php"
+                                class="inv-icon-btn"
+                                title="<?= t('Novo cliente') ?>"
+                                aria-label="<?= t('Novo cliente') ?>">
+                                <i class="bi bi-person-plus" aria-hidden="true"></i>
+                            </a>
 
                         </div>
 
                     </div>
 
-                    <!-- STEP 3 -->
-                    <div class="form-step" data-step="2">
 
-                        <div class="d-flex justify-content-between mb-2">
-                            <h4><?= t('Itens') ?></h4>
+                    <!-- DATA DE EMISSÃO -->
+                    <div class="inv-field">
 
-                            <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#itemModal">
-                                <i class="bi bi-plus-circle"></i> Novo produto/serviço
-                            </button>
+                        <label class="inv-label" for="issue_date">
+                            <?= t('Data de Emissão') ?> *
+                        </label>
+
+                        <input
+                            type="date"
+                            class="inv-input"
+                            id="issue_date"
+                            name="issue_date"
+                            value="<?= date('Y-m-d') ?>"
+                            required>
+
+                    </div>
+
+
+                    <!-- DATA DE VENCIMENTO -->
+                    <div class="inv-field">
+
+                        <label class="inv-label" for="due_date_picker">
+                            <?= t('Data de Vencimento') ?> *
+                        </label>
+
+                        <input
+                            type="date"
+                            class="inv-input"
+                            id="due_date_picker"
+                            name="due_date">
+
+                    </div>
+
+                </div>
+
+                <hr class="inv-divider">
+
+                <div class="inv-terms">
+                    <label class="inv-check" for="apply_retention">
+                        <input type="checkbox" id="apply_retention" data-rate="<?= $retentionRate ?>">
+                        <span><?= t('Aplicar Retenção na Fonte de Angola') ?> (<?= str_replace('.', ',', (string) $retentionRate) ?>% <?= t('de acordo com o Código do IRT/IVA') ?>)</span>
+                    </label>
+
+                    <div class="inv-chips" id="due_chips" role="group" aria-label="<?= t('Prazo de pagamento') ?>">
+                        <span><?= t('Prazo') ?>:</span>
+                        <button type="button" class="inv-chip" data-days="0"><?= t('Pronto pagamento') ?></button>
+                        <button type="button" class="inv-chip" data-days="15">15 <?= t('dias') ?></button>
+                        <button type="button" class="inv-chip" data-days="30">30 <?= t('dias') ?></button>
+                        <button type="button" class="inv-chip" data-days="45">45 <?= t('dias') ?></button>
+                        <button type="button" class="inv-chip" data-days="60">60 <?= t('dias') ?></button>
+                        <button type="button" class="inv-chip" data-days="90">90 <?= t('dias') ?></button>
+                    </div>
+                </div>
+
+                <div class="inv-fx" id="exchange_rate_container" style="display: none;">
+                    <label class="inv-label" for="manual_exchange_rate"><?= t('Câmbio') ?></label>
+                    <input type="number" step="0.0001" class="inv-input" id="manual_exchange_rate" name="manual_exchange_rate">
+                </div>
+
+                <!-- Ficha do cliente: preenchida pelo JS quando se escolhe um cliente -->
+                <div id="contact-form" class="inv-client" style="display: none;">
+                    <div class="inv-client-grid">
+                        <div class="inv-field">
+                            <label class="inv-label" for="contact_name"><?= t('Nome') ?></label>
+                            <input type="text" class="inv-input" id="contact_name" name="name">
                         </div>
-
-                        <hr>
-
-                        <div class="row mt-3 bg-white shadow-sm p-3 rounded">
-                            <div class="row mb-2">
-                                <div class="col-md-12">
-                                    <div class="items-container d-none" id="items_list">
-                                        <div class="row fw-bold bg-light p-2 rounded">
-                                            <div style="width: 120px !important;" class="col-1 text-center"><?= t('Código') ?></div>
-                                            <div class="col-3"><?= t('Descrição') ?></div>
-                                            <div class="col-2 text-center"><?= t('Preço Unitário') ?></div>
-                                            <div class="col-1 text-center"><?= t('Qtd.') ?></div>
-                                            <div style="width: 80px !important;" class="col-1 text-center"><?= t('Taxa/IVA') ?></div>
-                                            <div class="col-1 text-center"><?= t('Desc.%') ?></div>
-                                            <div class="col-2 text-center"><?= t('Total') ?></div>
-                                            <div style="width: 50px !important;" class="text-center">Ações</div>
-                                        </div>
-                                    </div>
-                                    <label for="item_select" class="form-label mt-4 mb-2"><?= t('Selecionar Item') ?></label><br>
-                                    <select class="form-select col-12 select2" style="width: 100% !important;" id="item_select">
-                                        <option value=""><?= t('Carregando itens...') ?></option>
-                                    </select>
-                                </div>
-                            </div>
+                        <div class="inv-field">
+                            <label class="inv-label" for="contributor"><?= t('NIF') ?></label>
+                            <input type="text" class="inv-input" id="contributor" name="contributor">
                         </div>
+                        <div class="inv-field">
+                            <label class="inv-label" for="email"><?= t('Email') ?></label>
+                            <input type="email" class="inv-input" id="email" name="email">
+                        </div>
+                        <div class="inv-field">
+                            <label class="inv-label" for="po_box"><?= t('Telefone') ?></label>
+                            <input type="tel" class="inv-input" id="po_box" name="po_box">
+                        </div>
+                        <div class="inv-field">
+                            <label class="inv-label" for="country"><?= t('País') ?></label>
+                            <select class="inv-select" id="country" name="country">
+                                <option value=""><?= t('Carregando países') ?>...</option>
+                            </select>
+                        </div>
+                        <div class="inv-field">
+                            <label class="inv-label" for="city"><?= t('Cidade') ?></label>
+                            <select class="inv-select" id="city" name="city">
+                                <option value=""><?= t('Escolha um país primeiro') ?></option>
+                            </select>
+                        </div>
+                        <div class="inv-field inv-field-wide">
+                            <label class="inv-label" for="address"><?= t('Endereço') ?></label>
+                            <textarea class="inv-input" id="address" name="address"></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div><!-- /inv-card -->
 
+            <!-- ============ LINHAS DO DOCUMENTO ============ -->
+            <div class="inv-card" id="lines_card">
+                <div class="inv-card-head">
+                    <h2 class="inv-card-title">
+                        <?= t('Linhas do Documento') ?>
+                        <span class="inv-count" id="lines_count">0</span>
+                    </h2>
 
-                        <h4 class="mt-3"><?= t('Resumo da Fatura') ?></h4>
-                        <hr>
+                    <div class="inv-card-actions">
+                        <button type="button" class="inv-btn inv-btn-ghost" data-bs-toggle="modal" data-bs-target="#itemModal">
+                            <i class="bi bi-box-seam" aria-hidden="true"></i> <?= t('Novo produto/serviço') ?>
+                        </button>
+                        <button type="button" class="inv-btn inv-btn-ghost" id="addLineBtn">
+                            <i class="bi bi-plus-lg" aria-hidden="true"></i> <?= t('Adicionar Linha') ?>
+                        </button>
+                    </div>
+                </div>
 
-                        <div class="bg-white shadow-sm p-3 rounded">
-                            <table class="table table-bordered mb-3">
-                                <thead class="table-light">
+                <div class="inv-lines-head" aria-hidden="true">
+                    <div><?= t('Artigo / Descrição') ?></div>
+                    <div><?= t('Qtd') ?></div>
+                    <div><?= t('P. Unitário') ?></div>
+                    <div><?= t('Desc (%)') ?></div>
+                    <div><?= t('IVA (%)') ?></div>
+                    <div><?= t('Total Linha') ?></div>
+                    <div></div>
+                </div>
+
+                <div id="items_list"></div>
+
+                <div class="inv-empty" id="items_empty">
+                    <i class="bi bi-receipt" aria-hidden="true"></i>
+                    <span><?= t('Ainda não há linhas neste documento. Escolha um artigo do catálogo para começar.') ?></span>
+                </div>
+
+                <div class="inv-picker">
+                    <label class="inv-label" for="item_select"><?= t('Adicionar artigo do catálogo') ?></label>
+                    <select class="select2 inv-select" id="item_select" data-width="100%">
+                        <option value=""><?= t('Carregando itens...') ?></option>
+                    </select>
+                </div>
+
+                <!-- Observações + resumo -->
+                <div class="inv-footer">
+                    <div>
+                        <label class="inv-label" for="observation"><?= t('Observações / Instruções de Pagamento') ?></label>
+                        <textarea class="inv-input inv-textarea" id="observation" name="observation"
+                            placeholder="<?= t('ex: Coordenadas bancárias para liquidação ou referência do cliente…') ?>"></textarea>
+
+                        <div class="inv-tax-wrap">
+                            <p class="inv-tax-title"><?= t('Resumo por taxa de IVA') ?></p>
+                            <table class="inv-tax">
+                                <thead>
                                     <tr>
-                                        <th><?= t('Taxa/IVA') ?></th>
+                                        <th><?= t('Taxa') ?></th>
                                         <th><?= t('Incidência') ?></th>
                                         <th><?= t('Valor (IVA)') ?></th>
                                         <th><?= t('Retenção') ?></th>
@@ -382,67 +1188,41 @@ require_once '../app/views/layout_creation.php';
                                 </thead>
                                 <tbody id="tax_summary">
                                     <tr>
-                                        <td>0%</td>
-                                        <td id="tax_exempt_incidence">0,00</td>
-                                        <td id="tax_exempt_value">0,00</td>
-                                    </tr>
-                                    <tr>
-                                        <td>14%</td>
-                                        <td id="tax_14_incidence">0,00</td>
-                                        <td id="tax_14_value">0,00</td>
+                                        <td colspan="5" class="inv-tax-empty"><?= t('Nenhum item adicionado') ?></td>
                                     </tr>
                                 </tbody>
                             </table>
-
-                            <table class="table table-bordered">
-                                <tbody>
-                                    <tr>
-                                        <td><?= t('Soma') ?></td>
-                                        <td id="total_sum">0,00</td>
-                                    </tr>
-                                    <tr>
-                                        <td><?= t('Desconto') ?></td>
-                                        <td id="total_discount">0,00</td>
-                                    </tr>
-                                    <tr>
-                                        <td><?= t('Subtotal') ?></td>
-                                        <td id="subtotal_without_tax">0,00</td>
-                                    </tr>
-                                    <tr>
-                                        <td><?= t('IVA') ?></td>
-                                        <td id="total_tax">0,00</td>
-                                    </tr>
-                                    <tr>
-                                        <td><?= t('Retenção') ?></td>
-                                        <td id="retention_value">0,00</td>
-                                    </tr>
-                                    <tr>
-                                        <td><strong><?= t('Total') ?></strong></td>
-                                        <td><strong id="final_total">0,00</strong></td>
-                                    </tr>
-                                </tbody>
-                            </table>
-
-                            <input type="hidden" name="total_sum">
-                            <input type="hidden" name="total_discount">
-                            <input type="hidden" name="subtotal_without_tax">
-                            <input type="hidden" name="total_tax">
-                            <input type="hidden" name="retention_value">
-                            <input type="hidden" name="final_total">
                         </div>
                     </div>
 
+                    <div class="inv-summary" role="complementary" aria-label="<?= t('Resumo do documento') ?>">
+                        <div class="inv-sum-row">
+                            <span><?= t('Soma') ?></span>
+                            <span id="total_sum">0,00</span>
+                        </div>
+                        <div class="inv-sum-row">
+                            <span><?= t('Desconto') ?></span>
+                            <span id="total_discount">0,00</span>
+                        </div>
+                        <div class="inv-sum-row">
+                            <span><?= t('Incidência (Subtotal Líquido)') ?>:</span>
+                            <span id="subtotal_without_tax">0,00</span>
+                        </div>
+                        <div class="inv-sum-row">
+                            <span><?= t('Total de IVA') ?>:</span>
+                            <span id="total_tax">0,00</span>
+                        </div>
+                        <div class="inv-sum-row d-none" id="retention_sumary">
+                            <span><?= t('Retenção na Fonte') ?>:</span>
+                            <span id="retention_value">0,00</span>
+                        </div>
+                        <div class="inv-sum-row inv-sum-total">
+                            <span><?= t('Total a Liquidar') ?>:</span>
+                            <span id="final_total">0,00</span>
+                        </div>
+                    </div><!-- /inv-summary -->
                 </div>
-            </div>
-
-            <!-- BOTÕES -->
-            <div class="mt-4 d-flex justify-content-between">
-                <button type="button" id="prevBtn" class="btn btn-light d-none">← Anterior</button>
-                <button type="button" id="nextBtn" class="btn btn-primary">Próximo →</button>
-                <button id="saveInvoiceBtn" type="button" class="btn btn-success d-none">
-                    <?= t('Finalizar Fatura') ?>
-                </button>
-            </div>
+            </div><!-- /inv-card -->
 
         </form>
     </div>
@@ -450,88 +1230,21 @@ require_once '../app/views/layout_creation.php';
 
 <!-- jQuery -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
-<!-- Select2 (se usares) -->
+<!-- Select2 -->
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
 <script>
     let company = null;
-    let currentStep = 1;
 
-    const steps = document.querySelectorAll(".form-step");
-    const nextBtn = document.getElementById("nextBtn");
-    const saveBtn = document.getElementById("saveInvoiceBtn");
-    const prevBtn = document.getElementById("prevBtn");
     const form = document.getElementById("formFatura");
-
-    /* ===== SHOW STEP ===== */
-    function showStep(step) {
-        steps.forEach(s => s.classList.remove("active"));
-
-        const current = document.querySelector(`.form-step[data-step="${step}"]`);
-        if (current) current.classList.add("active");
-
-        if (prevBtn) prevBtn.classList.toggle("d-none", step === 1);
-
-        if (step === steps.length) {
-            saveBtn?.classList.remove("d-none");
-            nextBtn?.classList.add("d-none");
-        } else {
-            saveBtn?.classList.add("d-none");
-            nextBtn?.classList.remove("d-none");
-        }
-
-        updateStepper();
-        updateProgress();
-    }
-
-    /* ===== STEPPER ===== */
-    function updateStepper() {
-        document.querySelectorAll(".step").forEach(el => {
-            const s = parseInt(el.dataset.step);
-            el.classList.remove("active", "completed");
-
-            if (s === currentStep) el.classList.add("active");
-            else if (s < currentStep) el.classList.add("completed");
-        });
-    }
-
-    /* ===== PROGRESS ===== */
-    function updateProgress() {
-        const bar = document.getElementById("progressBar");
-        if (!bar || steps.length === 0) return;
-
-        bar.style.width = ((currentStep / steps.length) * 100) + "%";
-    }
-
-    /* ===== VALIDATION ===== */
-    function validateStep() {
-        const current = document.querySelector(`.form-step[data-step="${currentStep}"]`);
-        if (!current) return true;
-
-        const inputs = current.querySelectorAll("[required]");
-        let valid = true;
-
-        inputs.forEach(input => {
-            if (!input.value.trim()) {
-                input.classList.add("is-invalid");
-                valid = false;
-            } else {
-                input.classList.remove("is-invalid");
-            }
-        });
-
-        return valid;
-    }
-
-    /* ===== LOCAL STORAGE ===== */
     const DOCUMENT_DRAFT_KEY = "invoiceDraft";
 
+    /* ===== RASCUNHO (localStorage) ===== */
     function saveDraft() {
         if (!form) return;
 
         const data = new FormData(form);
         const obj = {
-            currentStep,
             form: {},
             meta: {
                 contact_select: document.getElementById("contact-select")?.value || "",
@@ -557,224 +1270,84 @@ require_once '../app/views/layout_creation.php';
             });
         });
 
-        obj.vitems = obj.items;
         localStorage.setItem(DOCUMENT_DRAFT_KEY, JSON.stringify(obj));
     }
 
+    function readDraft() {
+        try {
+            return JSON.parse(localStorage.getItem(DOCUMENT_DRAFT_KEY) || "null");
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /* Repõe os campos simples. O cliente e as linhas são repostos pelo create_invoices.js */
     function loadDraft() {
-        if (!form) return;
-
-        const draft = JSON.parse(localStorage.getItem(DOCUMENT_DRAFT_KEY) || "null");
-        if (!draft) return;
-
-        if (typeof draft.currentStep === "number") {
-            currentStep = draft.currentStep;
-        }
-
-        if (draft.meta?.contact_select) {
-            const contactSelect = document.getElementById("contact-select");
-            if (contactSelect) {
-                contactSelect.value = draft.meta.contact_select;
-            }
-        }
+        const draft = readDraft();
+        if (!form || !draft) return;
 
         Object.keys(draft.form || {}).forEach(key => {
+            if (key === "series") return; // a série é sempre o ano corrente
             const field = form.querySelector(`[name="${key}"]`);
             if (field) field.value = draft.form[key];
         });
+    }
 
-        const hasSavedContact = Boolean(
-            draft.meta?.contact_select ||
-            draft.form?.contact_id ||
-            draft.form?.name ||
-            draft.form?.email ||
-            draft.form?.contributor ||
-            draft.form?.address
-        );
+    /* Chamada pelo create_invoices.js quando addItemRow já existe */
+    function restoreDraftItems(addRow) {
+        const draft = readDraft();
+        const items = Array.isArray(draft?.items) ? draft.items : [];
 
-        if (hasSavedContact) {
-            const contactForm = document.getElementById("contact-form");
-            if (contactForm) contactForm.style.display = "block";
-        }
+        items.forEach(item => {
+            const id = item.id || item.item_id;
+            if (!id) return;
 
-        const savedItems = Array.isArray(draft.items)
-            ? draft.items
-            : Array.isArray(draft.vitems)
-                ? draft.vitems
-                : [];
-
-        if (savedItems.length) {
-            const $list = document.querySelector("#items_list");
-            if ($list) {
-                $list.innerHTML = "";
-            }
-
-            savedItems.forEach(item => {
-                const rowItem = {
-                    id: item.id || item.item_id || item.ItemId,
-                    code: item.code || "",
-                    description: item.description || item.name || "",
-                    quantity: item.quantity || 1,
-                    unit_price: item.unit_price || item.price || 0,
-                    tax: item.tax || 0,
-                    discount: item.discount || 0,
-                    retention: item.retention || 0
-                };
-
-                if (rowItem.id) {
-                    if (typeof addItemRow === "function") {
-                        addItemRow(rowItem);
-                    }
-                }
+            addRow({
+                id: id,
+                code: item.code || "",
+                description: item.description || item.name || "",
+                line_quantity: item.quantity || 1,
+                unit_price: item.unit_price || 0,
+                tax: item.tax || 0,
+                discount: item.discount || 0,
+                retention: item.retention || 0
             });
-        }
-
-        if (typeof showStep === "function") showStep(currentStep);
-        if (typeof calc === "function") calc();
-        if (typeof updateInvoiceSummary === "function") updateInvoiceSummary();
+        });
     }
 
     function clearDraft() {
         localStorage.removeItem(DOCUMENT_DRAFT_KEY);
     }
 
-    window.addEventListener("beforeunload", function (event) {
+    window.addEventListener("beforeunload", function(event) {
         if (localStorage.getItem(DOCUMENT_DRAFT_KEY)) {
             event.preventDefault();
             event.returnValue = "Há um documento em rascunho. Deseja terminar a emissão antes de sair?";
         }
     });
 
-    /* ===== CALC ===== */
-    function calc() {
-        let total = 0;
+    form?.addEventListener("input", saveDraft);
+    form?.addEventListener("change", saveDraft);
 
-        document.querySelectorAll(".item-row").forEach(row => {
-            const p = parseFloat(row.querySelector(".price")?.value) || 0;
-            const q = parseFloat(row.querySelector(".qty")?.value) || 0;
+    document.addEventListener("DOMContentLoaded", loadDraft);
 
-            total += p * q;
-        });
-
-        const totalField = document.getElementById("final_total");
-        if (totalField) totalField.innerText = total.toFixed(2);
-    }
-
-    /* ===== EVENTS ===== */
-    nextBtn?.addEventListener("click", () => {
-        if (!validateStep()) return;
-
-        if (currentStep < steps.length) {
-            currentStep++;
-            saveDraft();
-            showStep(currentStep);
-        }
-    });
-
-    prevBtn?.addEventListener("click", () => {
-        if (currentStep > 1) {
-            currentStep--;
-            saveDraft();
-            showStep(currentStep);
-        }
-    });
-
-    form?.addEventListener("input", () => {
-        saveDraft();
-        calc();
-    });
-
-    form?.addEventListener("change", () => {
-        saveDraft();
-        calc();
-    });
-
-    /* ===== INIT ===== */
-    document.addEventListener("DOMContentLoaded", () => {
-        loadDraft();
-        showStep(currentStep);
-        calc();
-    });
-
-    /* ===== CURRENCY ===== */
+    /* ===== MOEDA ===== */
     let userCurrency = "<?= $_SESSION['user']['iso_code'] ?>";
     let currencySymbol = "<?= $_SESSION['user']['symbol'] ?>";
     let currencyPosition = "<?= $_SESSION['user']['position'] ?>";
 
-    /* ===== FORM CLIENT ===== */
-    function formClient() {
-        let current = 0;
-
-        const steps = document.querySelectorAll(".step-contentC");
-        const indicators = document.querySelectorAll(".stepC");
-        const bar = document.getElementById("stepCBar");
-        const prevBtn = document.getElementById("prevCBtn");
-        const nextBtn = document.getElementById("nextCBtn");
-        const saveBtn = document.getElementById("saveChangesContact");
-        const contactForm = document.getElementById("contactForm");
-
-        function update() {
-            const lastStep = steps.length - 1;
-
-            steps.forEach((s, i) =>
-                s.classList.toggle("active", i === current)
-            );
-
-            indicators.forEach((s, i) =>
-                s.classList.toggle("active", i <= current)
-            );
-
-            if (bar && lastStep > 0) {
-                bar.style.width = (current / lastStep) * 100 + "%";
-            }
-
-            if (prevBtn) prevBtn.style.display = current === 0 ? "none" : "block";
-
-            const isLast = current === lastStep;
-
-            if (isLast) {
-                nextBtn?.classList.add("d-none");
-                saveBtn?.classList.remove("d-none");
-            } else {
-                nextBtn?.classList.remove("d-none");
-                saveBtn?.classList.add("d-none");
-            }
-        }
-
-        nextBtn?.addEventListener("click", () => {
-            if (current < steps.length - 1) {
-                current++;
-                update();
-            } else {
-                contactForm?.submit();
-            }
-        });
-
-        prevBtn?.addEventListener("click", () => {
-            if (current > 0) {
-                current--;
-                update();
-            }
-        });
-
-        update();
-    }
-
-    formClient();
-
-    /* ===== SERIES FIELD ===== */
+    /* ===== SÉRIE ===== */
     const seriesField = document.getElementById("series");
 
     if (seriesField) {
-        const year = new Date().getFullYear();
-        seriesField.value = year;
+        seriesField.value = new Date().getFullYear();
 
         ["keydown", "paste", "drop"].forEach(evt =>
             seriesField.addEventListener(evt, e => e.preventDefault())
         );
     }
 
-    /* ===== FETCH COMPANY ===== */
+    /* ===== EMPRESA ===== */
     async function fetchCompany() {
         try {
             const response = await fetch(`assets/ajax/company_data.php`);
@@ -790,7 +1363,6 @@ require_once '../app/views/layout_creation.php';
             } else {
                 console.warn("Nenhum dado encontrado");
             }
-
         } catch (error) {
             console.error("Erro ao buscar empresa:", error);
         }
@@ -799,7 +1371,5 @@ require_once '../app/views/layout_creation.php';
     setTimeout(fetchCompany, 100);
 </script>
 
+<script src="create_invoices/create_invoices.js?v=2.1"></script>
 
-<script src="create_invoices/create_invoices.js?v=1.0"></script>
-
-<?php require_once '../app/views/footer.php'; ?>

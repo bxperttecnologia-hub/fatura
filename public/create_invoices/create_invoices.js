@@ -6,12 +6,28 @@ $(document).ready(function () {
   let invoiceId = null;
 
   initializeTooltips();
+
+  // ----- Cliente (modal em blocos) e Cliente X (anónimo) -----
+  const ANON_VALUE = "anon"; // valor do <option> virtual "Cliente X"
+  const ANON_EMAIL = "cliente-x@anonimo.local"; // igual a ANON_CONTACT_EMAIL em anonymous_contact.php
+  const CONTACT_LOGO_BASE = ""; // prefixo do caminho, se a BD só guardar o nome do ficheiro (ex.: "uploads/contacts/")
+  let contactsCache = [];
+  let anonContactId = null;
+  let contactsLoaded = false;
+
+  // Rascunho tal como estava ao abrir a página: repor as linhas grava o rascunho
+  // antes de os clientes carregarem e apagaria o cliente escolhido.
+  let bootDraft = null;
+  try {
+    bootDraft = JSON.parse(localStorage.getItem("invoiceDraft") || "null");
+  } catch (e) {}
+
   loadSelect2Items();
   fetchCurrencySymbol();
   fetchExchangeRate(userCurrency, $("#manual_exchange_rate").val());
 
   // Carrega contatos antes de verificar edição para garantir que o select esteja preenchido
-  loadContacts().then(() => {
+  const contactsReadyPromise = loadContacts().then(() => {
     const editId = new URLSearchParams(window.location.search).get("edit_id");
     if (editId) {
       loadInvoiceForEdit(editId);
@@ -25,7 +41,14 @@ $(document).ready(function () {
 
   // Quando um contato é selecionado, carrega os dados no formulário
   function syncContactIdValue() {
-    const selectedId = $("#contact-select").val() || $("#contact_id").val() || "";
+    // Cliente X: não há contact_id; o servidor resolve o contacto anónimo
+    if ($("#contact-select").val() === ANON_VALUE) {
+      $("#contact_id").val("");
+      return "";
+    }
+
+    const selectedId =
+      $("#contact-select").val() || $("#contact_id").val() || "";
     if (selectedId) {
       $("#contact_id").val(selectedId);
     }
@@ -34,7 +57,19 @@ $(document).ready(function () {
 
   $("#contact-select").on("change", function () {
     let contatoId = $(this).val();
+
+    // Cliente X (anónimo): sem ficha nem contact_id
+    if (contatoId === ANON_VALUE) {
+      $("#anonymous_client").val("1");
+      $("#contact_id").val("");
+      $("#contact-form").hide();
+      renderClientTrigger();
+      return;
+    }
+
+    $("#anonymous_client").val("0");
     $("#contact_id").val(contatoId || "");
+    renderClientTrigger();
 
     if (contatoId) {
       $.ajax({
@@ -48,8 +83,7 @@ $(document).ready(function () {
           $("#contact_name").val(contato.name).prop("disabled", true);
           $("#email").val(contato.email).prop("disabled", true);
           $("#contributor").val(contato.contributor).prop("disabled", true);
-          $("#po_box").val(contato.po_box).prop("disabled", true);
-          $("#telephone").val(contato.telephone).prop("disabled", true);
+          $("#po_box").val(contato.po_box || contato.telephone).prop("disabled", true);
           $("#address").val(contato.address).prop("disabled", true);
           selectCountry(contato.country, contato.city);
 
@@ -104,21 +138,340 @@ $(document).ready(function () {
     loadCities($(this).val());
   });
 
-  const dueDateSelect = document.getElementById("due_date");
-  const customDateInput = document.getElementById("custom_date");
+  // =====================================================================
+  // ESCOLHER CLIENTE — modal em blocos (logo + nome) e Cliente X (anónimo)
+  // O <select id="contact-select"> continua a ser a fonte de verdade (escondido):
+  // o modal só escolhe o valor e dispara "change".
+  // =====================================================================
+  const $clientModal = $("#clientModal").appendTo("body"); // fora de qualquer contentor do layout
 
-  // Exibe o campo de data se "Outro" estiver selecionado ao carregar a página
-  if (dueDateSelect) {
-    if (dueDateSelect.value === "other") {
-      document.getElementById("other_date_input").style.display = "block";
+  function toSelectValue(contactId) {
+    return anonContactId && String(contactId) === String(anonContactId)
+      ? ANON_VALUE
+      : contactId;
+  }
+
+  function contactLogo(contact) {
+    const raw = String(
+      contact?.logo ||
+        contact?.logo_url ||
+        contact?.avatar ||
+        contact?.photo ||
+        contact?.image ||
+        "",
+    ).trim();
+
+    if (!raw) return "";
+    return /^(https?:)?\/\/|^\/|^data:/i.test(raw)
+      ? raw
+      : CONTACT_LOGO_BASE + raw;
+  }
+
+  function initialsOf(name) {
+    const parts = String(name || "")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+    if (!parts.length) return "?";
+    return (
+      parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : "")
+    ).toUpperCase();
+  }
+
+  function hueOf(name) {
+    let hue = 0;
+    for (const ch of String(name || ""))
+      hue = (hue * 31 + ch.charCodeAt(0)) % 360;
+    return hue;
+  }
+
+  // Logo do cliente; se não houver (ou falhar a carregar) mostra as iniciais
+  function avatarHtml(contact, size) {
+    if (contact.anon) {
+      return `<span class="inv-avatar inv-avatar--${size} inv-avatar--anon" aria-hidden="true">X</span>`;
     }
 
-    // Adiciona eventos para o select e input de data
-    dueDateSelect.addEventListener("change", handleOtherOption);
+    const name = contact.name || "";
+    const hue = hueOf(name);
+    const initials = escapeAttr(initialsOf(name));
+    const logo = contactLogo(contact);
+
+    if (logo) {
+      return `<span class="inv-avatar inv-avatar--${size}" data-initials="${initials}" data-hue="${hue}">
+        <img src="${escapeAttr(logo)}" alt="" loading="lazy"></span>`;
+    }
+
+    return `<span class="inv-avatar inv-avatar--${size}" style="background:hsl(${hue} 55% 42%)" aria-hidden="true">${initials}</span>`;
   }
-  if (customDateInput) {
-    customDateInput.addEventListener("input", addCustomDateOption);
+
+  function bindAvatarFallbacks($root) {
+    $root
+      .find(".inv-avatar img")
+      .off("error")
+      .on("error", function () {
+        const $avatar = $(this).parent();
+        $avatar
+          .css("background", `hsl(${$avatar.data("hue")} 55% 42%)`)
+          .text($avatar.data("initials"));
+      });
   }
+
+  function renderClientTrigger() {
+    const value = String($("#contact-select").val() || "");
+    let html = `<span class="inv-client-placeholder">Selecione um cliente...</span>`;
+
+    if (value === ANON_VALUE) {
+      html = `${avatarHtml({ anon: true }, "sm")}<span class="inv-client-name">Cliente X</span>`;
+    } else if (value) {
+      const contact = contactsCache.find((c) => String(c.id) === value);
+      const name =
+        contact?.name ||
+        $("#contact-select option:selected").text().split(" - ")[0].trim();
+
+      html = `${avatarHtml(contact || { name }, "sm")}<span class="inv-client-name">${escapeAttr(name)}</span>`;
+    }
+
+    bindAvatarFallbacks(
+      $("#clientPickerBtn .inv-client-trigger-main").html(html),
+    );
+  }
+
+  function pickCardHtml(value, name, avatar, selected, extraClass) {
+    return `<button type="button" class="inv-pick-card ${extraClass || ""} ${selected ? "is-selected" : ""}"
+        data-id="${escapeAttr(value)}" title="${escapeAttr(name)}" aria-pressed="${selected}">
+        ${avatar}<span class="inv-pick-name">${escapeAttr(name)}</span></button>`;
+  }
+
+  function renderClientGrid(filter) {
+    const query = String(filter || "")
+      .trim()
+      .toLowerCase();
+    const current = String($("#contact-select").val() || "");
+    const cards = [];
+
+    // Cliente X é sempre o primeiro bloco
+    const anonWords = "cliente x anónimo anonimo consumidor final";
+    if (!query || anonWords.includes(query)) {
+      cards.push(
+        pickCardHtml(
+          ANON_VALUE,
+          "Cliente X",
+          avatarHtml({ anon: true }, "lg"),
+          current === ANON_VALUE,
+          "inv-pick-card--anon",
+        ),
+      );
+    }
+
+    contactsCache
+      .filter(
+        (c) =>
+          !query ||
+          `${c.name || ""} ${c.email || ""}`.toLowerCase().includes(query),
+      )
+      .forEach((c) => {
+        cards.push(
+          pickCardHtml(
+            c.id,
+            c.name || "Sem nome",
+            avatarHtml(c, "lg"),
+            String(c.id) === current,
+          ),
+        );
+      });
+
+    if (!contactsLoaded) {
+      cards.push(`<p class="inv-pick-empty">A carregar clientes…</p>`);
+    } else if (!cards.length) {
+      cards.push(`<p class="inv-pick-empty">Nenhum cliente encontrado.</p>`);
+    }
+
+    bindAvatarFallbacks($("#clientGrid").html(cards.join("")));
+  }
+
+  function openClientModal() {
+    $clientModal.addClass("is-open").attr("aria-hidden", "false");
+    $("html").addClass("inv-modal-open");
+    $("#clientSearch").val("");
+    renderClientGrid("");
+    setTimeout(() => $("#clientSearch").trigger("focus"), 30);
+  }
+
+  function closeClientModal() {
+    $clientModal.removeClass("is-open").attr("aria-hidden", "true");
+    $("html").removeClass("inv-modal-open");
+    $("#clientPickerBtn").trigger("focus");
+  }
+
+  $("#clientPickerBtn").on("click", openClientModal);
+
+  $clientModal.on("click", function (event) {
+    if (
+      event.target === this ||
+      $(event.target).closest("[data-inv-close]").length
+    ) {
+      closeClientModal();
+    }
+  });
+
+  $(document).on("keydown", function (event) {
+    if (event.key === "Escape" && $clientModal.hasClass("is-open"))
+      closeClientModal();
+  });
+
+  $("#clientSearch").on("input", function () {
+    renderClientGrid($(this).val());
+  });
+
+  // Enter escolhe o primeiro resultado
+  $("#clientSearch").on("keydown", function (event) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      $("#clientGrid .inv-pick-card").first().trigger("click");
+    }
+  });
+
+  $("#clientGrid").on("click", ".inv-pick-card", function () {
+    $("#contact-select")
+      .val(String($(this).data("id")))
+      .trigger("change");
+    if (typeof saveDraft === "function") saveDraft(); // .trigger() do jQuery não chega ao listener nativo do form
+    closeClientModal();
+  });
+
+  renderClientTrigger();
+
+  // =====================================================================
+  // PRAZO DE PAGAMENTO
+  // O backend guarda `due_date` como nº de dias. O campo escondido #due_date
+  // mantém esse valor; o date picker e os chips são só interface.
+  // =====================================================================
+  const MS_DAY = 86400000;
+
+  const parseISO = (value) => {
+    const [y, m, d] = String(value || "")
+      .split("-")
+      .map(Number);
+    return y ? new Date(y, m - 1, d) : null;
+  };
+
+  const toISO = (dt) =>
+    `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+
+  function syncDueUI() {
+    const days = Math.max(0, parseInt($("#due_date").val(), 10) || 0);
+    const issue = parseISO($("#issue_date").val()) || new Date();
+    const due = new Date(
+      issue.getFullYear(),
+      issue.getMonth(),
+      issue.getDate() + days,
+    );
+
+    $("#due_date_picker").val(toISO(due)).attr("min", $("#issue_date").val());
+
+    $("#due_chips .inv-chip").each(function () {
+      $(this).toggleClass("active", Number($(this).data("days")) === days);
+    });
+  }
+
+  function setDueDays(days) {
+    $("#due_date").val(Math.max(0, parseInt(days, 10) || 0));
+    syncDueUI();
+    if (typeof saveDraft === "function") saveDraft();
+  }
+
+  $("#due_chips").on("click", ".inv-chip", function () {
+    setDueDays($(this).data("days"));
+  });
+
+  $("#due_date_picker").on("change", function () {
+    const issue = parseISO($("#issue_date").val());
+    const due = parseISO($(this).val());
+
+    if (!issue || !due) return syncDueUI();
+    setDueDays(Math.round((due - issue) / MS_DAY));
+  });
+
+  // Ao mudar a emissão, o vencimento acompanha (mesmo nº de dias)
+  $("#issue_date").on("change", syncDueUI);
+
+  syncDueUI();
+
+  // =====================================================================
+  // RETENÇÃO NA FONTE (caixa de selecção -> campo escondido #retention)
+  // =====================================================================
+  const RETENTION_RATE = parseFloat($("#apply_retention").data("rate")) || 6.5;
+
+  function syncRetentionUI() {
+    $("#apply_retention").prop(
+      "checked",
+      (parseFloat($("#retention").val()) || 0) > 0,
+    );
+  }
+
+  $("#apply_retention").on("change", function () {
+    $("#retention").val(this.checked ? RETENTION_RATE.toFixed(2) : "0.00");
+    updateInvoiceSummary();
+    if (typeof saveDraft === "function") saveDraft();
+  });
+
+  syncRetentionUI();
+
+  // =====================================================================
+  // LINHAS: estado vazio, "Adicionar Linha", cancelar, modo edição
+  // =====================================================================
+  function refreshLinesState() {
+    const count = $("#items_list .item-list").length;
+    $("#lines_card").toggleClass("has-lines", count > 0);
+    $("#lines_count").text(count);
+  }
+
+  function escapeAttr(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  function setEditMode() {
+    $("#saveInvoiceBtn .btn-label").text("Guardar Alterações");
+    $("#inv_crumb_current").text("Editar Documento");
+  }
+
+  $("#addLineBtn").on("click", function () {
+    const $select = $("#item_select");
+    if ($select.hasClass("select2-hidden-accessible")) {
+      $select.select2("open");
+    } else {
+      $select.trigger("focus");
+    }
+  });
+
+  $("#cancelInvoiceBtn").on("click", function () {
+    const backUrl = $(this).data("href") || "invoices.php";
+    const hasWork =
+      $("#items_list .item-list").length > 0 ||
+      Boolean($("#contact-select").val());
+
+    const leave = () => {
+      if (typeof clearDraft === "function") clearDraft();
+      window.location.href = backUrl;
+    };
+
+    if (!hasWork) return leave();
+
+    Swal.fire({
+      icon: "warning",
+      title: "Descartar este documento?",
+      text: "O rascunho guardado neste navegador será apagado.",
+      showCancelButton: true,
+      confirmButtonText: "Descartar",
+      cancelButtonText: "Continuar a editar",
+    }).then((result) => {
+      if (result.isConfirmed) leave();
+    });
+  });
 
   function cleanCurrencyValue(value) {
     if (!value) return 0; // Caso o valor esteja vazio, retorna 0
@@ -136,6 +489,8 @@ $(document).ready(function () {
   const DRAFT_KEY = "invoiceDraft";
 
   function getStoredDraft() {
+    if (!contactsLoaded && bootDraft) return bootDraft;
+
     try {
       const raw = localStorage.getItem(DRAFT_KEY);
       return raw ? JSON.parse(raw) : null;
@@ -168,8 +523,7 @@ $(document).ready(function () {
       $("#contact_name").val(draftForm.name || "");
       $("#email").val(draftForm.email || "");
       $("#contributor").val(draftForm.contributor || "");
-      $("#po_box").val(draftForm.po_box || "");
-      $("#telephone").val(draftForm.telephone || "");
+      $("#po_box").val(draftForm.po_box || draftForm.telephone || "");
       $("#address").val(draftForm.address || "");
       $("#country").val(draftForm.country || "");
       $("#city").val(draftForm.city || "");
@@ -181,6 +535,14 @@ $(document).ready(function () {
   }
 
   function resolveContactValidationState() {
+    if ($("#contact-select").val() === ANON_VALUE) {
+      return {
+        selectedId: ANON_VALUE,
+        hasSelectedContact: true,
+        hasFilledNewContact: false,
+      };
+    }
+
     const draft = getStoredDraft();
     const currentSelected = $("#contact-select").val()?.trim() || "";
     const currentContactId = $("#contact_id").val()?.trim() || "";
@@ -242,7 +604,7 @@ $(document).ready(function () {
             </option>`;
         });
         $("#item_select").html(options);
-        $(".select2").select2();
+        $(".select2").select2({ width: "100%", dropdownParent: $("#invPage") });
       },
     });
   }
@@ -264,9 +626,11 @@ $(document).ready(function () {
 
       // limpa select
       select.empty();
+      contactsCache = [];
 
-      // opção padrão
-      select.append('<option value="">Selecione um contato...</option>');
+      // opção padrão + Cliente X (anónimo)
+      select.append('<option value="">Selecione um cliente...</option>');
+      select.append(`<option value="${ANON_VALUE}">Cliente X</option>`);
 
       // valida retorno
       if (
@@ -275,11 +639,20 @@ $(document).ready(function () {
         response.data.length > 0
       ) {
         response.data.forEach((contato) => {
-          select.append(`
-          <option value="${contato.id}">
-            ${contato.name} - ${contato.email}
-          </option>
-        `);
+          // O contacto técnico do Cliente X não aparece como cliente normal
+          if (
+            String(contato.email || "")
+              .trim()
+              .toLowerCase() === ANON_EMAIL
+          ) {
+            anonContactId = contato.id;
+            return;
+          }
+
+          contactsCache.push(contato);
+          select.append(
+            `<option value="${contato.id}">${escapeAttr(contato.name)} - ${escapeAttr(contato.email)}</option>`,
+          );
         });
       } else {
         select.append(`
@@ -318,6 +691,11 @@ $(document).ready(function () {
       throw xhr;
     } finally {
       select.prop("disabled", false);
+      contactsLoaded = true;
+      renderClientTrigger();
+      if (bootDraft && typeof saveDraft === "function") saveDraft();
+      if ($("#clientModal").hasClass("is-open"))
+        renderClientGrid($("#clientSearch").val());
     }
   }
 
@@ -367,7 +745,9 @@ $(document).ready(function () {
 
     let totalFinal = totalWithTax - totalDiscount;
 
-    row.find(".row-total").text(totalFinal.toFixed(2));
+    row
+      .find(".row-total")
+      .text(formatCurrency(totalFinal, currencySymbol, currencyPosition));
   }
 
   function calculateGrandTotal() {
@@ -434,10 +814,16 @@ $(document).ready(function () {
       item?.item_type === "service" ||
       String(code).toUpperCase().startsWith("SERV");
 
-    // Quantidade máxima
+    // Quantidade da linha (ao editar/repor rascunho) e quantidade máxima (stock)
+    const lineQty =
+      Number(item?.line_quantity) > 0 ? Number(item.line_quantity) : 1;
+
     const maxQty = isService
       ? 999999
-      : Number(item?.quantity ?? item?.stock_quantity ?? 9999);
+      : Math.max(
+          Number(item?.quantity ?? item?.stock_quantity ?? 9999),
+          lineQty,
+        );
 
     // Preço unitário
     const unitPrice = Number(
@@ -448,89 +834,49 @@ $(document).ready(function () {
     const discount = Number(item?.discount ?? 0);
 
     const itemHtml = `
-    <div
-        class="row row-item item-list align-items-center mb-2"
-        id="item-${itemId}"
-        data-id="${itemId}"
-    >
+    <div class="inv-line row-item item-list" id="item-${itemId}" data-id="${itemId}">
 
-        <div class="text-center" style="width:120px">
-            <input
-                type="text"
-                class="form-control field_code"
-                value="${code}"
-                readonly
-            >
+        <div class="inv-cell inv-cell-desc">
+            <input type="text" class="inv-line-desc field_description"
+                value="${escapeAttr(description)}" title="${escapeAttr(description)}" readonly>
+            <div class="inv-line-meta">
+                <input type="text" class="inv-line-code field_code"
+                    value="${escapeAttr(code)}" readonly tabindex="-1">
+                ${isService ? '<span class="inv-tag">Serviço</span>' : ""}
+            </div>
+            <input type="hidden" class="field_retention" value="${retention}">
         </div>
 
-        <div class="d-none">
-            <input
-                type="hidden"
-                class="field_retention"
-                value="${retention}"
-            >
+        <div class="inv-cell" data-label="Qtd">
+            <input type="number" class="inv-cell-input field_qtd"
+                value="${lineQty}" min="1" max="${maxQty}" aria-label="Quantidade">
         </div>
 
-        <div class="col-3">
-            <input
-                type="text"
-                class="form-control field_description"
-                value="${description}"
-                readonly
-            >
+        <div class="inv-cell" data-label="P. Unitário">
+            <input type="number" class="inv-cell-input field_price"
+                value="${unitPrice.toFixed(2)}" step="0.01" min="0" aria-label="Preço unitário">
         </div>
 
-        <div class="col-2">
-            <input
-                type="number"
-                class="form-control field_price"
-                value="${unitPrice.toFixed(2)}"
-                step="0.01"
-                min="0"
-            >
+        <div class="inv-cell" data-label="Desc (%)">
+            <input type="number" class="inv-cell-input field_desc"
+                value="${discount}" step="0.01" min="0" aria-label="Desconto em percentagem">
         </div>
 
-        <div class="col-1">
-            <input
-                type="number"
-                class="form-control field_qtd"
-                value="1"
-                min="1"
-                max="${maxQty}"
-            >
+        <div class="inv-cell" data-label="IVA (%)">
+            <span class="inv-pill">
+                <input type="number" class="field_tax" value="${taxValue}" step="0.01" readonly tabindex="-1" aria-label="IVA">%
+            </span>
         </div>
 
-        <div style="width:90px">
-            <input
-                type="number"
-                class="form-control field_tax"
-                value="${taxValue}"
-                step="0.01"
-                readonly
-            >
+        <div class="inv-cell inv-cell-total" data-label="Total Linha">
+            <span class="row-total">0,00</span>
         </div>
 
-        <div class="col-1">
-            <input
-                type="number"
-                class="form-control field_desc"
-                value="${discount}"
-                step="0.01"
-                min="0"
-            >
-        </div>
-
-        <div class="col-2 text-center row-total text-success fw-bold">
-            0,00
-        </div>
-
-        <div style="width:50px" class="text-center">
-            <i
-                class="bi bi-trash remove-item cursor"
-                data-id="${itemId}"
-                role="button"
-                title="Remover item"
-            ></i>
+        <div class="inv-cell inv-cell-act">
+            <button type="button" class="inv-trash remove-item" data-id="${itemId}"
+                title="Remover linha" aria-label="Remover linha">
+                <i class="bi bi-trash3" aria-hidden="true"></i>
+            </button>
         </div>
 
     </div>
@@ -558,6 +904,7 @@ $(document).ready(function () {
 
     newRow.find(".remove-item").on("click", function () {
       newRow.remove();
+      refreshLinesState();
 
       if (typeof updateInvoiceSummary === "function") {
         updateInvoiceSummary();
@@ -585,6 +932,8 @@ $(document).ready(function () {
       showTableItemsList();
     }
 
+    refreshLinesState();
+
     if (typeof saveDraft === "function") saveDraft();
   }
 
@@ -592,6 +941,7 @@ $(document).ready(function () {
   $(document).on("click", ".remove-item", function () {
     let itemId = $(this).data("id");
     $(`#item-${itemId}`).remove();
+    refreshLinesState();
     if (typeof saveDraft === "function") saveDraft();
   });
 
@@ -652,7 +1002,7 @@ $(document).ready(function () {
     // =========================
     $("#tax_summary").html(`
         <tr>
-            <td colspan="5" class="text-center text-muted">
+            <td colspan="5" class="inv-tax-empty">
                 Nenhum item adicionado
             </td>
         </tr>
@@ -892,6 +1242,12 @@ $(document).ready(function () {
 
     let final = base - extraRetention;
 
+    // O que é gravado tem de coincidir com o que o ecrã mostra
+    $("input[name='retention_value']").val(
+      (totalRetentionItems + extraRetention).toFixed(2),
+    );
+    $("input[name='final_total']").val(Math.max(final, 0).toFixed(2));
+
     // UI
     if (extraRetention > 0 || totalRetentionItems > 0) {
       $("#retention_sumary").removeClass("d-none");
@@ -1105,52 +1461,6 @@ $(document).ready(function () {
       });
   }
 
-  // Função para lidar com a seleção da opção "Outro"
-  function handleOtherOption() {
-    const dueDateSelect = document.getElementById("due_date");
-    const otherDateInput = document.getElementById("other_date_input");
-
-    // Exibe o campo de data quando a opção "Outro" for selecionada
-    if (dueDateSelect.value === "other") {
-      otherDateInput.style.display = "block"; // Mostra o campo de data
-    } else {
-      otherDateInput.style.display = "none"; // Oculta o campo de data
-    }
-  }
-
-  // Função para calcular a diferença de dias e atualizar o valor do "Outro"
-  function addCustomDateOption() {
-    const customDateInput = document.getElementById("custom_date");
-    const dueDateSelect = document.getElementById("due_date");
-
-    if (customDateInput.value) {
-      const today = new Date();
-      const selectedDate = new Date(customDateInput.value);
-      const timeDifference = selectedDate.getTime() - today.getTime();
-      const daysDifference = Math.ceil(timeDifference / (1000 * 3600 * 24)); // Diferença em dias
-
-      if (daysDifference > 0) {
-        // Tenta encontrar a opção "Outro", ou cria se não existir
-        let otherOption = dueDateSelect.querySelector(
-          'option[data-type="other"]',
-        );
-
-        if (!otherOption) {
-          otherOption = document.createElement("option");
-          otherOption.dataset.type = "other"; // Marca a opção como "Outro"
-          dueDateSelect.appendChild(otherOption); // Adiciona a opção ao select
-        }
-
-        // Atualiza o texto e valor da opção "Outro"
-        otherOption.value = daysDifference; // Define o valor como número de dias
-        otherOption.text = `Customizado - (${daysDifference} Dias)`; // Atualiza o texto exibido
-        dueDateSelect.value = daysDifference; // Seleciona automaticamente a opção
-      } else {
-        alert("Selecione uma data futura.");
-      }
-    }
-  }
-
   $("#saveInvoiceBtn").on("click", function (event) {
     event.preventDefault();
 
@@ -1171,7 +1481,6 @@ $(document).ready(function () {
         "address",
         "email",
         "po_box",
-        "telephone",
         "country",
         "city",
         "issue_date",
@@ -1248,10 +1557,14 @@ $(document).ready(function () {
     const selectedContactId = syncContactIdValue();
 
     if (selectedContactId) {
-      const hasContactIdField = invoiceData.some((field) => field.name === "contact_id");
+      const hasContactIdField = invoiceData.some(
+        (field) => field.name === "contact_id",
+      );
       if (hasContactIdField) {
         invoiceData = invoiceData.map((field) =>
-          field.name === "contact_id" ? { ...field, value: selectedContactId } : field,
+          field.name === "contact_id"
+            ? { ...field, value: selectedContactId }
+            : field,
         );
       } else {
         invoiceData.push({ name: "contact_id", value: selectedContactId });
@@ -1274,6 +1587,8 @@ $(document).ready(function () {
     // =========================
     // AJAX
     // =========================
+    const $saveBtn = $("#saveInvoiceBtn").prop("disabled", true);
+
     $.ajax({
       url:
         invoiceId != null
@@ -1288,6 +1603,7 @@ $(document).ready(function () {
       },
       success: function (response) {
         if (!response.success) {
+          $saveBtn.prop("disabled", false);
           return Swal.fire({
             icon: "error",
             title: "Erro",
@@ -1315,10 +1631,12 @@ $(document).ready(function () {
         });
       },
       error: function (xhr, status, error) {
+        $saveBtn.prop("disabled", false);
+
         Swal.fire({
           icon: "error",
           title: "Erro",
-          text: "Erro ao conectar ao servidor.",
+          text: xhr.responseJSON?.error || "Erro ao conectar ao servidor.",
         });
 
         console.log("STATUS:", status);
@@ -1359,15 +1677,17 @@ $(document).ready(function () {
             code: item.code || "",
             description: item.description || item.name || "",
             unit_price: item.unit_price || 0,
-            quantity: item.quantity || 1,
+            line_quantity: item.quantity || 1,
             tax: item.tax || 0,
             discount: item.discount || 0,
           });
         });
       }
 
+      syncDueUI();
+      syncRetentionUI();
       updateInvoiceSummary();
-      $("#saveInvoiceBtn").text("Atualizar Fatura");
+      setEditMode();
       invoiceId = id;
       return;
     }
@@ -1382,13 +1702,12 @@ $(document).ready(function () {
 
       $("#edit_invoice_id").val(id);
 
-      $("#contact-select").val(data.contact_id).trigger("change");
+      $("#contact-select")
+        .val(toSelectValue(data.contact_id))
+        .trigger("change");
       $("#issue_date").val(data.issue_date);
 
-      if ($("#due_date option[value='" + data.due_date + "']").length === 0) {
-        $("#due_date").append(new Option(data.due_date, data.due_date));
-      }
-      $("#due_date").val(data.due_date);
+      setDueDays(data.due_date);
 
       $("#reference").val(data.reference);
       $("#observation").val(data.observation);
@@ -1421,17 +1740,372 @@ $(document).ready(function () {
             code: item.code,
             description: item.description || item.name,
             unit_price: item.unit_price,
-            quantity: item.quantity,
+            line_quantity: item.quantity,
             tax: item.tax,
             discount: item.discount,
           });
         });
       }
+      syncRetentionUI();
       updateInvoiceSummary();
 
-      $("#saveInvoiceBtn").text("Atualizar Fatura");
+      setEditMode();
     });
 
     invoiceId = id;
   }
+  // Expõe addItemRow ao script inline e repõe as linhas do rascunho
+  window.addItemRow = addItemRow;
+
+  if (
+    typeof restoreDraftItems === "function" &&
+    !new URLSearchParams(window.location.search).get("edit_id")
+  ) {
+    restoreDraftItems(addItemRow);
+  }
+
+  refreshLinesState();
+
+  /* =========================================================
+   SELECÇÃO DE CLIENTE
+========================================================= */
+
+  (function () {
+    const selectBtn = document.getElementById("btn-select-contact");
+
+    const modalElement = document.getElementById("contactSelectModal");
+
+    const contactsList = document.getElementById("contactsList");
+
+    const contactsLoading = document.getElementById("contactsLoading");
+
+    const contactsEmpty = document.getElementById("contactsEmpty");
+
+    const contactSearch = document.getElementById("contactSearch");
+
+    const contactSelect = document.getElementById("contact-select");
+
+    const contactIdInput = document.getElementById("contact_id");
+
+    const contactSelectLabel = document.getElementById("contact-select-label");
+
+    const contactForm = document.getElementById("contact-form");
+
+    if (!selectBtn || !modalElement) {
+      return;
+    }
+
+    const contactModal = bootstrap.Modal.getOrCreateInstance(modalElement);
+
+    // Usa a MESMA lista já carregada por loadContacts() (contacts/ajax/fetch_contacts.php)
+    // em vez de duplicar o pedido para o endpoint errado (get_contact.php é para 1 contacto).
+    function currentContacts() {
+      return contactsCache;
+    }
+
+    /* =====================================================
+       ABRIR MODAL
+    ===================================================== */
+
+    selectBtn.addEventListener("click", function (event) {
+      event.preventDefault();
+
+      contactModal.show();
+
+      openContactsList();
+    });
+
+    /* =====================================================
+       PREPARAR/MOSTRAR A LISTA DE CONTACTOS
+    ===================================================== */
+
+    async function openContactsList() {
+      contactsLoading.classList.remove("d-none");
+
+      contactsEmpty.classList.add("d-none");
+
+      contactsList.innerHTML = "";
+
+      try {
+        if (!contactsLoaded) {
+          await contactsReadyPromise;
+        }
+
+        contactsLoading.classList.add("d-none");
+
+        renderContacts(currentContacts());
+      } catch (error) {
+        console.error("Erro ao carregar contactos:", error);
+
+        contactsLoading.classList.add("d-none");
+
+        contactsList.innerHTML = "";
+
+        contactsEmpty.classList.remove("d-none");
+
+        contactsEmpty.querySelector("strong").textContent =
+          "Erro ao carregar clientes";
+
+        contactsEmpty.querySelector("span").textContent =
+          "Não foi possível carregar a lista de clientes.";
+      }
+    }
+
+    /* =====================================================
+       RENDERIZAR CONTACTOS
+    ===================================================== */
+
+    function renderContacts(list, query) {
+      contactsList.innerHTML = "";
+
+      const showAnon =
+        !query ||
+        "cliente x anónimo anonimo consumidor final".includes(
+          String(query || "").toLowerCase(),
+        );
+
+      if (showAnon) {
+        const anonItem = document.createElement("div");
+        anonItem.className = "contact-item";
+        anonItem.dataset.contactId = ANON_VALUE;
+        anonItem.dataset.name = "Cliente X";
+        anonItem.dataset.nif = "";
+        anonItem.innerHTML = `
+                <div class="contact-avatar"><i class="bi bi-person-x"></i></div>
+                <div class="contact-info">
+                    <div class="contact-name">Cliente X</div>
+                    <div class="contact-nif">Consumidor final / anónimo</div>
+                </div>
+                <div class="contact-check"><i class="bi bi-check-lg"></i></div>
+            `;
+        contactsList.appendChild(anonItem);
+      }
+
+      if ((!list || list.length === 0) && !showAnon) {
+        contactsEmpty.classList.remove("d-none");
+
+        return;
+      }
+
+      contactsEmpty.classList.add("d-none");
+
+      (list || []).forEach((contact) => {
+        const id = contact.id ?? contact.contact_id ?? contact.ID;
+
+        const name =
+          contact.name ??
+          contact.contact_name ??
+          contact.company_name ??
+          "Cliente sem nome";
+
+        const nif =
+          contact.contributor ??
+          contact.nif ??
+          contact.tax_number ??
+          contact.NIF ??
+          "";
+
+        const logo =
+          contact.logo ??
+          contact.logo_url ??
+          contact.image ??
+          contact.avatar ??
+          "";
+
+        const item = document.createElement("div");
+
+        item.className = "contact-item";
+
+        /*
+         * Guardar o ID diretamente no elemento.
+         */
+
+        item.dataset.contactId = id;
+
+        item.dataset.name = name;
+
+        item.dataset.nif = nif;
+
+        /*
+         * Logo
+         */
+
+        let avatarHtml;
+
+        if (logo) {
+          avatarHtml = `
+                    <div class="contact-avatar">
+
+                        <img
+                            src="${escapeHtml(logo)}"
+                            alt=""
+                            onerror="
+                                this.style.display='none';
+                                this.nextElementSibling.style.display='block';
+                            "
+                        >
+
+                        <i
+                            class="bi bi-building"
+                            style="display:none;"
+                        ></i>
+
+                    </div>
+                `;
+        } else {
+          avatarHtml = `
+                    <div class="contact-avatar">
+                        <i class="bi bi-building"></i>
+                    </div>
+                `;
+        }
+
+        /*
+         * HTML do contacto
+         */
+
+        item.innerHTML = `
+
+                ${avatarHtml}
+
+                <div class="contact-info">
+
+                    <div class="contact-name">
+                        ${escapeHtml(name)}
+                    </div>
+
+                    <div class="contact-nif">
+                        NIF: ${escapeHtml(nif || "—")}
+                    </div>
+
+                </div>
+
+                <div class="contact-check">
+
+                    <i class="bi bi-check-lg"></i>
+
+                </div>
+
+            `;
+
+        contactsList.appendChild(item);
+      });
+    }
+
+    /* =====================================================
+       CLICAR NO CONTACTO
+    ===================================================== */
+
+    contactsList.addEventListener("click", function (event) {
+      const item = event.target.closest(".contact-item");
+
+      if (!item) {
+        return;
+      }
+
+      const contactId = item.dataset.contactId;
+
+      const contactName = item.dataset.name;
+
+      const contactNif = item.dataset.nif;
+
+      if (!contactId) {
+        console.error("Contacto sem contact_id.");
+
+        return;
+      }
+
+      /*
+       * Marcar visualmente.
+       */
+
+      document.querySelectorAll(".contact-item.selected").forEach((element) => {
+        element.classList.remove("selected");
+      });
+
+      item.classList.add("selected");
+
+      /*
+       * =================================================
+       * GUARDAR CONTACT_ID
+       * =================================================
+       */
+
+      if (contactIdInput) {
+        contactIdInput.value = contactId;
+      }
+
+      /*
+       * Alterar o botão.
+       */
+
+      if (contactSelectLabel) {
+        contactSelectLabel.textContent = contactName;
+      }
+
+      /*
+       * Disparar o "change" real em #contact-select: é o handler já
+       * existente (mais acima neste ficheiro) que busca os dados
+       * completos do contacto, trata o Cliente X anónimo, país/cidade
+       * e desabilita os campos — definir só o .value não chamava isto.
+       */
+
+      if (contactSelect) {
+        $(contactSelect).val(contactId).trigger("change");
+      }
+
+      /*
+       * Fechar automaticamente.
+       */
+
+      setTimeout(() => {
+        contactModal.hide();
+      }, 120);
+    });
+
+    /* =====================================================
+       PESQUISA
+    ===================================================== */
+
+    contactSearch.addEventListener("input", function () {
+      const search = this.value.toLowerCase().trim();
+
+      const filtered = currentContacts().filter((contact) => {
+        const name = String(
+          contact.name ?? contact.contact_name ?? contact.company_name ?? "",
+        ).toLowerCase();
+
+        const nif = String(
+          contact.contributor ?? contact.nif ?? contact.tax_number ?? "",
+        ).toLowerCase();
+
+        return name.includes(search) || nif.includes(search);
+      });
+
+      renderContacts(filtered, search);
+    });
+
+    /* =====================================================
+       AO ABRIR
+    ===================================================== */
+
+    modalElement.addEventListener("shown.bs.modal", function () {
+      contactSearch.value = "";
+
+      contactSearch.focus();
+    });
+
+    /* =====================================================
+       ESCAPE HTML
+    ===================================================== */
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+  })();
 });

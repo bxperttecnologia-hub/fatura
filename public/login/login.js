@@ -49,6 +49,13 @@ EQIDAQAB
           });
         }
       },
+      error: function () {
+        Swal.fire({
+          icon: "error",
+          title: "Erro",
+          text: "Falha na comunicação com o servidor.",
+        });
+      },
     });
   });
 });

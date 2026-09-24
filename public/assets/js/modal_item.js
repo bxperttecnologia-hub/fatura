@@ -39,8 +39,10 @@ document.addEventListener("DOMContentLoaded", () => {
       depotCard.classList.toggle("active", isProduct);
     }
 
+    // Gestão de stock é opcional: o usuário pode criar o item agora
+    // e associá-lo a um depósito/stock mais tarde.
     if (stockSelect) {
-      stockSelect.required = isProduct;
+      stockSelect.required = false;
     }
 
     if (!isProduct) {
@@ -301,10 +303,11 @@ document.addEventListener("DOMContentLoaded", () => {
   categorySelect.addEventListener("change", syncUI);
 
   // Subcategoria
-  subcategorySelect.addEventListener("change", () => {
-    updateFiscal();
-    // alert("ok")
-  });
+  if (subcategorySelect) {
+    subcategorySelect.addEventListener("change", () => {
+      updateFiscal();
+    });
+  }
 
   // Stock
   if (stockSelect) {
@@ -383,19 +386,6 @@ $(document).ready(function () {
 
         const modalEl = document.getElementById("itemModal");
         const modal = bootstrap.Modal.getInstance(modalEl);
-
-        if (modal) {
-          modal.hide();
-        }
-
-        setTimeout(() => {
-          document
-            .querySelectorAll(".modal-backdrop")
-            .forEach((el) => el.remove());
-          document.body.classList.remove("modal-open");
-          document.body.style.removeProperty("padding-right");
-          document.body.style.removeProperty("overflow");
-        }, 300);
 
         if (modal) {
           modal.hide();

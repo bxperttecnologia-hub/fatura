@@ -116,6 +116,52 @@ require_once '../app/views/layout_creation.php';
         padding: 0px 10px !important;
         height: 20px !important;
     }
+
+    /* Botão de notas (piscante enquanto não há notas) */
+    .btn-notes {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid #f59e0b;
+        background: #fffbeb;
+        color: #92400e;
+        border-radius: 999px;
+        padding: 8px 16px;
+        font-size: .85rem;
+        font-weight: 600;
+        animation: notesBlink 1.4s ease-in-out infinite;
+    }
+
+    .btn-notes .material-icons-round {
+        font-size: 20px;
+    }
+
+    .btn-notes.has-notes {
+        border-color: #16a34a;
+        background: #f0fdf4;
+        color: #166534;
+        animation: none;
+    }
+
+    @keyframes notesBlink {
+
+        0%,
+        100% {
+            box-shadow: 0 0 0 0 rgba(245, 158, 11, .55);
+            opacity: 1;
+        }
+
+        50% {
+            box-shadow: 0 0 0 8px rgba(245, 158, 11, 0);
+            opacity: .55;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .btn-notes {
+            animation: none;
+        }
+    }
 </style>
 
 <body>
@@ -130,7 +176,11 @@ require_once '../app/views/layout_creation.php';
                         <h3 class="fw-bold"><?= t("Adicionar Nova Empresa"); ?></h3>
                         <p class="text-muted"><?= t("Cadastro por etapas"); ?></p>
                     </div>
-                    <div class="mt-3 mt-md-0">
+                    <div class="mt-3 mt-md-0 d-flex flex-wrap align-items-center gap-2">
+                        <button type="button" id="btnNotes" class="btn-notes" title="<?= t('Acrescentar notas ou observações importantes') ?>">
+                            <i class="material-icons-round" id="btnNotesIcon">edit_note</i>
+                            <span id="btnNotesText"><?= t('Acrescentar notas ou observações importantes') ?></span>
+                        </button>
                         <?php if ($isLocal): // Renderiza o botão apenas se estiver em localhost 
                         ?>
                             <button type="button" id="btnFillContact" class="btn btn-outline-warning btn-sm d-none">
@@ -141,6 +191,7 @@ require_once '../app/views/layout_creation.php';
                 </div>
 
                 <input type="hidden" name="company_id" value="<?= $_SESSION['user']['company_id'] ?>">
+                <input type="hidden" name="observations" id="observations" value="">
                 <input type="hidden" name="<?= isset($_GET['id']) ? 'updated_at' : 'created_at'; ?>" value="<?= $dateAtual ?>">
 
                 <div class="row g-4">
@@ -166,14 +217,34 @@ require_once '../app/views/layout_creation.php';
                                 </div>
                                 <div class="card-body pt-3">
                                     <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <label for="contributor"
+                                                class="form-label text-muted small fw-bold required"><?= t('NIF / Registro') ?></label>
+                                            <div class="input-group">
+                                                <input type="text" class="form-control" id="contributor" name="contributor"
+                                                    placeholder="Ex: 5000000000" autocomplete="off" required>
+                                                <button type="button" class="btn btn-outline-primary" id="btnConsultNif"
+                                                    title="<?= t('Consultar NIF na AGT') ?>">
+                                                    <i class="material-icons-round align-middle fs-6">search</i>
+                                                </button>
+                                            </div>
+                                            <div id="nifStatus" class="form-text"></div>
+                                        </div>
 
-                                        <div class="col-12">
+                                        <div class="col-md-6 col-12">
                                             <label for="name"
                                                 class="form-label text-muted small fw-bold required"><?= t('Nome da Empresa') ?></label>
                                             <input type="text" class="form-control form-control-lg" id="companyName" name="name"
                                                 placeholder="Nome comercial completo" required>
                                         </div>
 
+                                        <div class="col-12">
+                                            <label for="address"
+                                                class="form-label text-muted small fw-bold required"><?= t('Endereço Completo') ?></label>
+                                            <textarea class="form-control" id="address" name="address" rows="2"
+                                                placeholder="Rua, Número, Bairro..." required></textarea>
+                                        </div>
+                                        <!-- 
                                         <div class="col-md-6">
                                             <label for="type"
                                                 class="form-label text-muted small fw-bold"><?= t('Tipo de Cliente') ?></label>
@@ -181,33 +252,7 @@ require_once '../app/views/layout_creation.php';
                                                 <option value="<?= t('Normal') ?>"><?= t('Normal') ?></option>
                                                 <option value="<?= t('Autofaturação') ?>"><?= t('Autofaturação') ?></option>
                                             </select>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <label for="contributor"
-                                                class="form-label text-muted small fw-bold required"><?= t('NIF / Registro') ?></label>
-                                            <input type="text" class="form-control" id="contributor" name="contributor"
-                                                placeholder="Ex: 000000000" required>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <label for="country"
-                                                class="form-label text-muted small fw-bold"><?= t('País') ?></label>
-                                            <select class="form-select" id="country" name="country">
-                                                <option value=""><?= t('Carregando países') ?>...</option>
-                                            </select>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <label for="city"
-                                                class="form-label text-muted small fw-bold"><?= t('Cidade') ?></label>
-                                            <select class="form-select" id="city" name="city">
-                                                <option value=""><?= t('Escolha um país primeiro') ?></option>
-                                            </select>
-                                        </div>
-                                        <div class="col-12">
-                                            <label for="address"
-                                                class="form-label text-muted small fw-bold required"><?= t('Endereço Completo') ?></label>
-                                            <textarea class="form-control" id="address" name="address" rows="2"
-                                                placeholder="Rua, Número, Bairro..." required></textarea>
-                                        </div>
+                                        </div> -->
 
                                     </div>
                                 </div>
@@ -236,7 +281,7 @@ require_once '../app/views/layout_creation.php';
                                             <label for="email"
                                                 class="form-label text-muted small fw-bold"><?= t('Email Corporativo') ?></label>
                                             <input type="email" class="form-control" id="email" name="email"
-                                                placeholder="contato@empresa.com" required>
+                                                placeholder="contato@empresa.com">
                                         </div>
                                         <div class="col-md-6">
                                             <label for="website"
@@ -247,27 +292,11 @@ require_once '../app/views/layout_creation.php';
 
                                         <div class="col-md-6">
                                             <label for="telephone"
-                                                class="form-label text-muted small fw-bold required"><?= t('Telefone Fixo') ?></label>
-                                            <div class="input-group flex-nowrap">
-                                                <select class="form-select countryPhone tel" name="telephone_ddi"
-                                                    id="telephone_ddi" style="max-width: 90px;" required>
-                                                    <option selected value="">DDI</option>
-                                                </select>
-                                                <input type="text" name="telephone" class="form-control telnumber"
-                                                    id="telephone" placeholder="000 000 000" required>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <label for="cellphone"
-                                                class="form-label text-muted small fw-bold"><?= t('Telemóvel') ?></label>
-                                            <div class="input-group flex-nowrap">
-                                                <select class="form-select countryPhone tel" name="cellphone_ddi"
-                                                    id="cellphone_ddi" style="max-width: 90px;">
-                                                    <option selected value="">DDI</option>
-                                                </select>
-                                                <input type="text" name="cellphone" id="cellphone"
-                                                    class="form-control telnumber" placeholder="900 000 000">
-                                            </div>
+                                                class="form-label text-muted small fw-bold required"><?= t('Telefone') ?></label>
+                                            <input type="text" name="telephone" id="telephone" class="form-control"
+                                                inputmode="numeric" maxlength="9" pattern="[29][0-9]{8}"
+                                                placeholder="9XXXXXXXX" autocomplete="off" required>
+                                            <div class="form-text"><?= t('9 dígitos, começa por 2 ou 9') ?></div>
                                         </div>
                                         <div class="col-md-6 d-none">
                                             <label for="fax"
@@ -304,24 +333,16 @@ require_once '../app/views/layout_creation.php';
                                         <label
                                             class="form-label text-muted small fw-bold"><?= t('Telefone Direto') ?></label>
                                         <div class="input-group flex-nowrap">
-                                            <select class="form-select countryPhone tel" name="pref_telephone_ddi"
-                                                id="pref_telephone_ddi" style="max-width: 80px;">
-                                                <option selected value="">DDI</option>
-                                            </select>
-                                            <input type="text" class="form-control telnumber" name="pref_telephone"
-                                                id="pref_telephone">
+                                            <input type="text" class="form-control" name="pref_telephone" id="pref_telephone"
+                                                inputmode="numeric" maxlength="9" pattern="[29][0-9]{8}" placeholder="9XXXXXXXX">
                                         </div>
                                     </div>
                                     <div class="mb-3 d-none">
                                         <label
                                             class="form-label text-muted small fw-bold"><?= t('Telemóvel Direto') ?></label>
                                         <div class="input-group flex-nowrap">
-                                            <select class="form-select countryPhone tel" name="pref_cellphone_ddi"
-                                                id="pref_cellphone_ddi" style="max-width: 80px;">
-                                                <option selected value="">DDI</option>
-                                            </select>
-                                            <input type="text" class="form-control telnumber" name="pref_cellphone"
-                                                id="pref_cellphone">
+                                            <input type="text" class="form-control" name="pref_cellphone" id="pref_cellphone"
+                                                inputmode="numeric" maxlength="9" pattern="[29][0-9]{8}">
                                         </div>
                                     </div>
                                 </div>
@@ -339,7 +360,7 @@ require_once '../app/views/layout_creation.php';
 
                     <!-- RIGHT (ASIDE ORIGINAL) -->
                     <!-- Coluna Direita: Preferências e Contato Pessoal -->
-                    <div class="col-lg-3">
+                    <div class="col-lg-3 d-none d-lg-block">
                         <!-- Card: Configurações -->
                         <div class="card border-0 shadow-sm mb-4">
                             <div class="card-header bg-white border-bottom-0 pt-4 pb-0">
@@ -359,36 +380,28 @@ require_once '../app/views/layout_creation.php';
                                     <?= numberCopysSelect(); ?>
                                 </div>
                                 <div class="mb-3">
-                                    <label for="due_date"
-                                        class="form-label text-muted small fw-bold"><?= t('Vencimento Padrão') ?></label>
-                                    <?= due_dateSelect(); ?>
+                                    <label class="form-label text-muted small fw-bold"><?= t('Vencimento Padrão') ?></label>
+                                    <input type="text" class="form-control" value="<?= t('Pronto pagamento') ?>" readonly tabindex="-1">
+                                    <input type="hidden" name="due_date" id="due_date" value="0">
                                 </div>
                                 <div class="mb-3">
-                                    <label for="language"
-                                        class="form-label text-muted small fw-bold required"><?= t('Idioma') ?></label>
-                                    <select class="form-select" name="language" required id="language">
-                                        <option value="BR">Português Brasileiro</option>
-                                        <option value="AO" selected>Português Angolano</option>
-                                    </select>
+                                    <label class="form-label text-muted small fw-bold"><?= t('Idioma') ?></label>
+                                    <input type="text" class="form-control" value="<?= t('Português') ?>" readonly tabindex="-1">
+                                    <input type="hidden" name="language" id="language" value="AO">
                                 </div>
                                 <div class="mb-3">
                                     <label for="payment_method"
                                         class="form-label text-muted small fw-bold required"><?= t('Método de Pagamento') ?></label>
                                     <select class="form-select" name="payment_method" required id="payment_method">
-                                        <?= getPaymentMethods(); ?>
+                                        <option value="NU" selected><?= t('Dinheiro') ?></option>
+                                        <option value="MB"><?= t('Multicaixa') ?></option>
+                                        <option value="TB"><?= t('Transferência') ?></option>
                                     </select>
                                 </div>
                                 <div class="mb-3">
-                                    <label for="currency"
-                                        class="form-label text-muted small fw-bold required"><?= t('Moeda Preferencial') ?></label>
-                                    <select class="form-select" name="currency" required id="currency">
-                                        <?= currencySelects(); ?>
-                                    </select>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="observations"
-                                        class="form-label text-muted small fw-bold"><?= t('Observações Internas') ?></label>
-                                    <textarea class="form-control" name="observations" id="observations" rows="3"></textarea>
+                                    <label class="form-label text-muted small fw-bold"><?= t('Moeda Preferencial') ?></label>
+                                    <input type="text" class="form-control" value="<?= t('Kwanza') ?> (AOA)" readonly tabindex="-1">
+                                    <input type="hidden" name="currency" id="currency" value="AOA">
                                 </div>
                             </div>
                         </div>
@@ -444,29 +457,38 @@ require_once '../app/views/layout_creation.php';
         }
 
         // ================= VALIDATION =================
+        const PHONE_REGEX = /^[29]\d{8}$/; // 9 dígitos, começa por 2 ou 9
+        const EMAIL_FIELD_NAMES = ["email", "pref_email"];
+
         function validateStep(stepIndex) {
             const currentStep = steps[stepIndex];
-            const requiredFields = currentStep.querySelectorAll("[required]");
+            const fields = currentStep.querySelectorAll("input:not([type=hidden]), select, textarea");
 
-            for (let field of requiredFields) {
-                const value = field.value.trim();
+            const fail = (field, message) => {
+                showError(message);
+                field.classList.add("is-invalid");
+                field.focus();
+                return false;
+            };
+
+            for (let field of fields) {
+                const value = (field.value || "").trim();
+                const isEmailField = EMAIL_FIELD_NAMES.includes(field.name);
 
                 // limpa erro anterior
                 field.classList.remove("is-invalid");
 
-                if (!value) {
-                    showError(`Preencha o campo: ${getLabel(field)}`);
-                    field.classList.add("is-invalid");
-                    field.focus();
-                    return false;
+                // Email nunca é obrigatório, mesmo que o input tenha o atributo required
+                if (field.required && !value && !isEmailField) {
+                    return fail(field, `Preencha o campo: ${getLabel(field)}`);
                 }
+
+                // campos opcionais vazios não são validados
+                if (!value) continue;
 
                 // NAME
                 if (field.name === "name" && value.length < 6) {
-                    showError("Nome deve ter no mínimo 6 caracteres.");
-                    field.classList.add("is-invalid");
-                    field.focus();
-                    return false;
+                    return fail(field, "Nome deve ter no mínimo 6 caracteres.");
                 }
 
                 // NIF
@@ -475,110 +497,18 @@ require_once '../app/views/layout_creation.php';
                     const nifRegex2 = /^\d{9}[A-Za-z0-9]+$/; // 9 dígitos + alfanumérico
 
                     if (!(nifRegex1.test(value) || nifRegex2.test(value))) {
-                        showError("NIF inválido. Ex: 943798589UB049 ou 50000000123214");
-                        field.classList.add("is-invalid");
-                        field.focus();
-                        return false;
-                    } else {
-                        document.getElementById('contributor').addEventListener('blur', function() {
-
-                            const field = this;
-                            const registration_number = field.value.trim();
-
-                            if (registration_number !== '') {
-
-                                fetch('index/ajax/check_contribuitor.php', {
-                                        method: 'POST',
-                                        headers: {
-                                            'Content-Type': 'application/json'
-                                        },
-                                        body: JSON.stringify({
-                                            registration_number: registration_number
-                                        })
-                                    })
-                                    .then(response => response.json())
-                                    .then(data => {
-
-                                        if (data.exists) {
-
-                                            showError("Este NIF já existe. Por favor, insira outro.");
-
-                                            field.classList.add("is-invalid");
-
-                                            field.value = '';
-
-                                            field.focus();
-
-                                        } else {
-
-                                            field.classList.remove("is-invalid");
-
-                                        }
-
-                                    })
-                                    .catch(error => {
-                                        console.error('Erro:', error);
-                                    });
-                            }
-                        });
+                        return fail(field, "NIF inválido. Ex: 943798589UB049 ou 50000000123214");
                     }
                 }
 
-                // EMAIL
-                if (field.name === "email" && value && !value.includes("@")) {
-                    showError("Email inválido.");
-                    field.classList.add("is-invalid");
-                    field.focus();
-                    return false;
+                // EMAIL (opcional, mas se preenchido tem de ser válido)
+                if (isEmailField && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+                    return fail(field, "Email inválido.");
                 }
 
-                // TELEFONE
-                // TELEPHONE (fixo - flexível)
-                if (field.name === "telephone") {
-                    const phoneRegex = /^\d{6,15}$/; // aceita 6 a 15 dígitos
-
-                    if (!phoneRegex.test(value)) {
-                        showError("Telefone inválido. Deve conter apenas números.");
-                        field.classList.add("is-invalid");
-                        field.focus();
-                        return false;
-                    }
-                }
-
-                // CELLPHONE (móvel - Angola)
-                if (field.name === "cellphone") {
-                    const phoneRegex = /^9\d{8}$/;
-
-                    if (value && !phoneRegex.test(value)) {
-                        showError("Telemóvel inválido. Deve começar com 9 e ter 9 dígitos.");
-                        field.classList.add("is-invalid");
-                        field.focus();
-                        return false;
-                    }
-                }
-
-                // TELEFONE PREFERENCIAL
-                if (field.name === "pref_telephone") {
-                    const phoneRegex = /^\d{6,15}$/;
-
-                    if (value && !phoneRegex.test(value)) {
-                        showError("Telefone preferencial inválido.");
-                        field.classList.add("is-invalid");
-                        field.focus();
-                        return false;
-                    }
-                }
-
-                // CELLPHONE PREFERENCIAL
-                if (field.name === "pref_cellphone") {
-                    const phoneRegex = /^9\d{8}$/;
-
-                    if (value && !phoneRegex.test(value)) {
-                        showError("Telemóvel preferencial inválido.");
-                        field.classList.add("is-invalid");
-                        field.focus();
-                        return false;
-                    }
+                // TELEFONES (9 dígitos, começa por 2 ou 9)
+                if (["telephone", "pref_telephone", "pref_cellphone"].includes(field.name) && !PHONE_REGEX.test(value)) {
+                    return fail(field, "Telefone inválido. Deve ter 9 dígitos e começar por 2 ou 9.");
                 }
             }
 
@@ -625,10 +555,15 @@ require_once '../app/views/layout_creation.php';
         });
 
         // INIT
+        // Garante que o navegador também não bloqueia o submit por conta
+        // do atributo required nos campos de email
+        document.querySelectorAll('input[name="email"], input[name="pref_email"]')
+            .forEach(f => f.removeAttribute("required"));
+
         update();
     </script>
 
-    <script src="contacts/register_contact.js"></script>
+    <script src="contacts/register_contact.js?v=0.3"></script>
 
     <?php require_once '../app/views/footer.php'; ?>
 </body>

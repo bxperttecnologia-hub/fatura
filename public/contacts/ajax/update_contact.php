@@ -12,6 +12,22 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         exit;
     }
  
+    // Validações dos campos que vierem no pedido
+    foreach (["telephone", "pref_telephone", "pref_cellphone"] as $phoneField) {
+        if (isset($_POST[$phoneField]) && trim($_POST[$phoneField]) !== "" && !preg_match('/^[29]\d{8}$/', trim($_POST[$phoneField]))) {
+            echo json_encode(["status" => "error", "message" => "Telefone inválido. Deve ter 9 dígitos e começar por 2 ou 9."]);
+            exit;
+        }
+    }
+    if (isset($_POST["telephone"]) && trim($_POST["telephone"]) === "") {
+        echo json_encode(["status" => "error", "message" => "O campo 'telephone' é obrigatório."]);
+        exit;
+    }
+    if (!empty($_POST["email"]) && !filter_var(trim($_POST["email"]), FILTER_VALIDATE_EMAIL)) {
+        echo json_encode(["status" => "error", "message" => "Email inválido."]);
+        exit;
+    }
+
     $fieldsToUpdate = [];
     $params = [];
 

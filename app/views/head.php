@@ -1,3 +1,16 @@
+<?php
+// BUG FIX: session_start() estava a ser chamado só perto do fim deste ficheiro,
+// depois de já se ter feito echo de todo o <!DOCTYPE html>...</head> (meta tags,
+// <link>, <script>, etc.). Nessa altura os headers HTTP já foram enviados ao
+// browser, por isso o cookie de sessão (Set-Cookie) que session_start() precisa
+// de enviar falha silenciosamente ou dispara o aviso "headers already sent" —
+// e, em alguns servidores/config de output_buffering, a sessão simplesmente
+// não é criada/persistida nesse pedido. A sessão tem de arrancar antes de
+// qualquer output.
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+?>
 <!DOCTYPE html>
 <html lang="pt">
 
@@ -103,9 +116,6 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/imask"></script>
 
-    <!-- chart js-->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
     <!-- Leaflet -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -114,14 +124,13 @@
 
     <!-- jsPDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
     <!-- html2canvas + jsPDF bundle -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <!-- <script src="../../vendor/"></script> -->
 
     <!-- Estilos -->
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=0.2">
     <link rel="stylesheet" href="assets/css/side.css">
 
     <?php
@@ -137,7 +146,7 @@
     }
     ?>
 
-    <!-- Quill – visual “Snow” -->
+    <!-- Quill – visual “Snow” -->
     <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
     <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
 
@@ -157,5 +166,11 @@
 
 </head>
 <?php
-require_once('../app/models/modal_item.php');
+// A sessão já foi iniciada no topo do ficheiro (ver comentário BUG FIX acima).
+// Substitua 'usuario_id' pelo nome da chave que você utiliza para controlar o login no seu sistema
+if (!isset($_SESSION['user']['user_id'])) {
+    require_once('../app/models/modal_item.php');
+    require_once('../app/models/modal_contacts.php');
+    // require_once('../app/views/set_password.php');
+}
 ?>

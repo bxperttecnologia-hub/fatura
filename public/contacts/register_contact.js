@@ -7,6 +7,71 @@ $(document).ready(function () {
     return urlParams.get(param);
   }
 
+  // ---------- helpers de rede / campos manuais ----------
+  function fetchWithTimeout(url, options = {}, ms = 8000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ms);
+    return fetch(url, { ...options, signal: controller.signal }).finally(() =>
+      clearTimeout(timer),
+    );
+  }
+
+  // Sem internet (GeoNames indisponível): troca o <select> por um campo de texto
+  function toTextInput(id, value = "", placeholder = "") {
+    const el = $("#" + id);
+    if (!el.length || el.is("input")) return;
+    if (el.hasClass("select2-hidden-accessible")) el.select2("destroy");
+    const input = $("<input>", {
+      type: "text",
+      class: "form-control",
+      id: id,
+      name: id,
+      placeholder: placeholder,
+      required: el.prop("required"),
+    }).val(value);
+    el.replaceWith(input);
+  }
+
+  function enableManualLocation(country = "", city = "") {
+    toTextInput("country", country, "País");
+    toTextInput("city", city, "Cidade");
+  }
+
+  // ---------- botão de notas / observações ----------
+  function refreshNotesButton() {
+    const has = ($("#observations").val() || "").trim() !== "";
+    $("#btnNotes").toggleClass("has-notes", has);
+    $("#btnNotesIcon").text(has ? "task_alt" : "edit_note");
+    $("#btnNotesText").text(
+      has
+        ? "Notas adicionadas — clique para editar"
+        : "Acrescentar notas ou observações importantes",
+    );
+  }
+
+  $("#btnNotes").on("click", async function () {
+    const result = await Swal.fire({
+      title: "Notas e observações",
+      input: "textarea",
+      inputValue: $("#observations").val() || "",
+      inputPlaceholder:
+        "Escreva aqui notas ou observações importantes sobre este cliente...",
+      inputAttributes: { "aria-label": "Notas e observações" },
+      showCancelButton: true,
+      confirmButtonText: "Guardar",
+      cancelButtonText: "Cancelar",
+    });
+    if (result.isConfirmed) {
+      $("#observations").val((result.value || "").trim());
+      refreshNotesButton();
+    }
+  });
+
+  // Telefones: só dígitos, máximo 9
+  $("#telephone, #pref_telephone, #pref_cellphone").on("input", function () {
+    this.value = this.value.replace(/\D/g, "").slice(0, 9);
+  });
+
   async function selectCountry(selectedCountry = "", selectedCity = "") {
     const username = "israelsouza";
 
@@ -27,7 +92,9 @@ $(document).ready(function () {
         citySelect.select2("destroy");
       }
 
-      const response = await fetch(
+      if (navigator.onLine === false) throw new Error("Sem internet");
+
+      const response = await fetchWithTimeout(
         `https://secure.geonames.org/countryInfoJSON?username=${username}`,
       );
 
@@ -67,7 +134,8 @@ $(document).ready(function () {
     } catch (error) {
       console.error("Erro ao carregar países:", error);
 
-      countrySelect.html('<option value="">Erro ao carregar países</option>');
+      // Sem internet / GeoNames em baixo: preenchimento manual
+      enableManualLocation(selectedCountry || "Angola", selectedCity);
 
       return false;
     }
@@ -92,7 +160,9 @@ $(document).ready(function () {
 
       citySelect.html('<option value="">Carregando cidades...</option>');
 
-      const response = await fetch(
+      if (navigator.onLine === false) throw new Error("Sem internet");
+
+      const response = await fetchWithTimeout(
         `https://secure.geonames.org/childrenJSON?geonameId=${countryId}&username=israelsouza`,
       );
 
@@ -134,76 +204,8 @@ $(document).ready(function () {
     } catch (error) {
       console.error("Erro ao carregar cidades:", error);
 
-      citySelect.html('<option value="">Erro ao carregar cidades</option>');
+      toTextInput("city", selectedCity, "Cidade");
 
-      return false;
-    }
-  }
-
-  async function loadDDI(selectedDDIs = {}) {
-    try {
-      const response = await fetch("assets/ajax/get_countries.php");
-
-      const data = await response.json();
-
-      const ddiData = [
-        {
-          id: "",
-          text: "DDI",
-          selectedText: "DDI",
-        },
-        ...data.map((country) => ({
-          id: country.phone,
-          text: `${country.name} (+${country.phone})`,
-          selectedText: `+${country.phone}`,
-        })),
-      ];
-
-      const ddiFields = [
-        "telephone_ddi",
-        "cellphone_ddi",
-        "pref_telephone_ddi",
-        "pref_cellphone_ddi",
-      ];
-
-      ddiFields.forEach((fieldId) => {
-        const field = $(`#${fieldId}`);
-
-        // destroy select2 antes
-        if (field.hasClass("select2-hidden-accessible")) {
-          field.select2("destroy");
-        }
-
-        field.empty();
-
-        field.select2({
-          width: "90px",
-          placeholder: "DDI",
-          allowClear: false,
-          dropdownParent: field.parent(),
-
-          data: ddiData,
-
-          templateResult: function (option) {
-            return option.text;
-          },
-
-          templateSelection: function (option) {
-            const selectedItem = ddiData.find((item) => item.id == option.id);
-
-            return selectedItem ? selectedItem.selectedText : option.text;
-          },
-        });
-
-        // preencher valor
-        if (selectedDDIs[fieldId]) {
-          field.val(selectedDDIs[fieldId]).trigger("change");
-        }
-      });
-
-      return true;
-    } catch (error) {
-      console.error("Erro ao carregar DDIs:", error);
       return false;
     }
   }
@@ -240,9 +242,9 @@ $(document).ready(function () {
       $("#telephone").val(contact.telephone || "");
       $("#address").val(contact.address || "");
       $("#observations").val(contact.observations || "");
+      refreshNotesButton();
       $("#contributor").val(contact.contributor || "");
       $("#po_box").val(contact.po_box || "");
-      $("#cellphone").val(contact.cellphone || "");
       $("#website").val(contact.website || "");
       $("#fax").val(contact.fax || "");
       $("#pref_name").val(contact.pref_name || "");
@@ -256,10 +258,7 @@ $(document).ready(function () {
       const selectFields = {
         "#type": contact.type,
         "#numberCopys": contact.numberCopys,
-        "#due_date": contact.due_date,
-        "#language": contact.language,
         "#payment_method": contact.payment_method,
-        "#currency": contact.currency,
       };
 
       Object.entries(selectFields).forEach(([selector, value]) => {
@@ -268,16 +267,6 @@ $(document).ready(function () {
         if (field.length) {
           field.val(value ?? "").trigger("change");
         }
-      });
-
-      // =========================
-      // DDI
-      // =========================
-      await loadDDI({
-        telephone_ddi: contact.telephone_ddi || "",
-        cellphone_ddi: contact.cellphone_ddi || "",
-        pref_telephone_ddi: contact.pref_telephone_ddi || "",
-        pref_cellphone_ddi: contact.pref_cellphone_ddi || "",
       });
 
       // =========================
@@ -309,20 +298,14 @@ $(document).ready(function () {
   function toggleFields() {
     let isChecked = $("#usar_definicoes").prop("checked");
 
-    // Inputs e Textareas ficam readonly
-    $("#observations").prop("readonly", isChecked);
-
+    // Vencimento, idioma e moeda são fixos; observações agora usam o botão de notas.
     // Selects não podem ser editados, mas ainda serão enviados
     if (isChecked) {
-      $(
-        "#observations, #due_date,#numberCopys, #language, #currency, #payment_method",
-      )
+      $("#numberCopys, #payment_method")
         .addClass("blocked-select")
         .attr("tabindex", "-1");
     } else {
-      $(
-        "#observations, #due_date, #numberCopys, #language, #currency, #payment_method",
-      )
+      $("#numberCopys, #payment_method")
         .removeClass("blocked-select")
         .removeAttr("tabindex");
     }
@@ -348,7 +331,6 @@ $(document).ready(function () {
             $(this).data("original", $(this).val());
           });
       });
-      loadDDI(); // Apenas uma consulta ao banco
     }
   }
 
@@ -458,30 +440,25 @@ $(document).ready(function () {
   // Botão para preencher dados de teste
   $("#btnFillContact").on("click", function () {
     $("#type").val("Normal").trigger("change");
-    $("#name").val("Empresa Teste " + Math.floor(Math.random() * 1000));
-    $("#contributor").val("NIF" + Math.floor(Math.random() * 1000000));
+    $("#companyName").val("Empresa Teste " + Math.floor(Math.random() * 1000));
+    $("#contributor").val(
+      "5" + String(Math.floor(Math.random() * 1e9)).padStart(9, "0"),
+    );
     $("#email").val(
       "contato" + Math.floor(Math.random() * 1000) + "@teste.com",
     );
     $("#address").val("Rua Exemplo, 123 - Centro");
-    $("#telephone").val("222333444");
+    $("#telephone").val("923456789");
     $("#po_box").val("CP-123");
-    $("#cellphone").val("923456789");
     $("#website").val("www.teste.com");
     $("#fax").val("222000000");
 
     $("#pref_name").val("Gerente Teste");
     $("#pref_email").val("gerente@teste.com");
     $("#pref_telephone").val("222555666");
-    $("#pref_cellphone").val("912345678");
-
-    // Preenche os DDIs (assumindo 244 para Angola)
-    $("#telephone_ddi").val("244").trigger("change");
-    $("#cellphone_ddi").val("244").trigger("change");
-    $("#pref_telephone_ddi").val("244").trigger("change");
-    $("#pref_cellphone_ddi").val("244").trigger("change");
 
     $("#observations").val("Cadastro de teste gerado automaticamente.");
+    refreshNotesButton();
 
     // Tenta selecionar Angola se já estiver carregado
     if ($("#country option[value='Angola']").length > 0) {
@@ -489,6 +466,259 @@ $(document).ready(function () {
       setTimeout(function () {
         $("#city").val("Luanda").trigger("change");
       }, 1000);
+    }
+  });
+
+  // =========================
+  // CONSULTA DE NIF NA AGT (com cache e modo offline)
+  // =========================
+  const NIF_REGEX = /^(5\d+|\d{9}[A-Za-z0-9]+)$/;
+  const NIF_CACHE_KEY = "agt_nif_cache_v1";
+  const NIF_CACHE_TTL = 24 * 60 * 60 * 1000; // 24h
+  const NIF_CACHE_MAX = 200;
+  let lastNifChecked = "";
+  let nifRequestId = 0;
+  let nifWaitingForInternet = false;
+
+  function setNifStatus(type, text) {
+    const el = document.getElementById("nifStatus");
+    if (!el) return;
+    const colors = {
+      loading: "text-muted",
+      success: "text-success",
+      warning: "text-warning",
+      error: "text-danger",
+    };
+    el.className = "form-text " + (colors[type] || "");
+    el.textContent = text || "";
+  }
+
+  // ---- cache local (localStorage) ----
+  function readNifCache() {
+    try {
+      return JSON.parse(localStorage.getItem(NIF_CACHE_KEY)) || {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function getCachedNif(key) {
+    return readNifCache()[key] || null;
+  }
+
+  function saveCachedNif(key, data) {
+    try {
+      const cache = readNifCache();
+      cache[key] = { t: Date.now(), data: data };
+      const keys = Object.keys(cache);
+      if (keys.length > NIF_CACHE_MAX) {
+        keys
+          .sort((a, b) => cache[a].t - cache[b].t)
+          .slice(0, keys.length - NIF_CACHE_MAX)
+          .forEach((k) => delete cache[k]);
+      }
+      localStorage.setItem(NIF_CACHE_KEY, JSON.stringify(cache));
+    } catch (e) {
+      /* localStorage indisponível: segue sem cache */
+    }
+  }
+
+  // BI (9 dígitos + 2 letras + 3 dígitos) => AID, restantes => NIF
+  function detectDocType(value) {
+    return /^\d{9}[A-Za-z]{2}\d{3}$/.test(value) ? "AID" : "NIF";
+  }
+
+  async function nifAlreadyExists(value) {
+    try {
+      const r = await fetch("index/ajax/check_contribuitor.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ registration_number: value }),
+      });
+      const d = await r.json();
+      return !!d.exists;
+    } catch (e) {
+      console.error("Erro ao verificar NIF duplicado:", e);
+      return false;
+    }
+  }
+
+  function applyNifData(c, note = "") {
+    const field = document.getElementById("contributor");
+
+    if (c.nome) {
+      $("#companyName").val(c.nome).removeClass("is-invalid");
+    }
+    field.classList.remove("is-invalid");
+
+    const partes = [c.nome, c.estado_label, c.regime_label]
+      .filter(Boolean)
+      .join(" · ");
+
+    if (c.estado && c.estado !== "A") {
+      setNifStatus("warning", `${partes} — contribuinte não ativo${note}`);
+      Swal.fire({
+        icon: "warning",
+        title: "Atenção",
+        text: `Este contribuinte consta como "${c.estado_label}" na AGT.`,
+      });
+    } else {
+      setNifStatus(
+        "success",
+        partes + (c.nao_residente ? " · Não residente" : "") + note,
+      );
+    }
+  }
+
+  async function consultNIF(force = false) {
+    if (contactId) return; // só na criação de cliente
+
+    const field = document.getElementById("contributor");
+    const value = field.value.trim();
+
+    if (!value || !NIF_REGEX.test(value)) {
+      setNifStatus("", "");
+      return;
+    }
+    if (!force && value === lastNifChecked) return;
+
+    lastNifChecked = value;
+    const reqId = ++nifRequestId;
+
+    // 1) NIF já existe na nossa base?
+    if (await nifAlreadyExists(value)) {
+      if (reqId !== nifRequestId) return;
+      lastNifChecked = "";
+      field.classList.add("is-invalid");
+      field.value = "";
+      setNifStatus("error", "Este NIF já existe.");
+      Swal.fire({
+        icon: "error",
+        title: "Erro!",
+        text: "Este NIF já existe. Por favor, insira outro.",
+      });
+      return;
+    }
+
+    const tipoDocumento = detectDocType(value);
+    const cacheKey = tipoDocumento + "|" + value.toUpperCase();
+    const cached = getCachedNif(cacheKey);
+
+    // 2) Cache válida (24h): não repete o request
+    if (!force && cached && Date.now() - cached.t < NIF_CACHE_TTL) {
+      applyNifData(cached.data, " · (cache)");
+      return;
+    }
+
+    // 3) Sem internet: usa cache antiga se existir, senão preenchimento manual
+    if (navigator.onLine === false) {
+      nifWaitingForInternet = true;
+      if (cached) {
+        applyNifData(cached.data, " · (cache, sem internet)");
+      } else {
+        setNifStatus(
+          "warning",
+          "Sem internet. Preencha os dados do cliente manualmente.",
+        );
+      }
+      return;
+    }
+
+    // 4) Consulta à AGT (via proxy PHP)
+    setNifStatus("loading", "A consultar NIF na AGT...");
+    $("#btnConsultNif").prop("disabled", true);
+
+    try {
+      const response = await fetchWithTimeout(
+        "contacts/ajax/consult_nif.php",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tipoDocumento: tipoDocumento,
+            numeroDocumento: value,
+            refresh: force,
+          }),
+        },
+        20000,
+      );
+      const raw = await response.text();
+      let res;
+      try {
+        res = JSON.parse(raw);
+      } catch (parseError) {
+        // o servidor devolveu HTML (erro PHP): mostra o início para diagnóstico
+        console.error(
+          "consult_nif.php não devolveu JSON (HTTP " + response.status + "):",
+          raw.replace(/<[^>]+>/g, " ").slice(0, 500),
+        );
+        throw parseError;
+      }
+
+      if (reqId !== nifRequestId) return; // resposta antiga
+
+      // diagnóstico: mostra na consola o motivo devolvido pelo servidor / AGT
+      if (res.status !== "success") {
+        console.warn("consult_nif.php respondeu:", response.status, res);
+      }
+
+      if (res.status === "success") {
+        saveCachedNif(cacheKey, res.data);
+        nifWaitingForInternet = false;
+        applyNifData(res.data);
+      } else if (res.status === "not_found") {
+        setNifStatus(
+          "warning",
+          (res.message || "NIF não encontrado na AGT") +
+            ". Preencha os dados manualmente.",
+        );
+      } else if (cached) {
+        applyNifData(cached.data, " · (dados em cache)");
+      } else {
+        setNifStatus(
+          "error",
+          (res.message || "Falha na consulta à AGT") +
+            ". Preencha os dados manualmente.",
+        );
+      }
+    } catch (error) {
+      if (reqId !== nifRequestId) return;
+      console.error("Erro ao consultar NIF na AGT:", error);
+      if (navigator.onLine === false) nifWaitingForInternet = true;
+      if (cached) {
+        applyNifData(cached.data, " · (dados em cache)");
+      } else {
+        setNifStatus(
+          "error",
+          "Não foi possível consultar a AGT. Preencha os dados manualmente.",
+        );
+      }
+    } finally {
+      if (reqId === nifRequestId) {
+        $("#btnConsultNif").prop("disabled", false);
+      }
+    }
+  }
+
+  $("#contributor").on("blur", () => consultNIF());
+  $("#contributor").on("keydown", function (e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      consultNIF(true);
+    }
+  });
+  $("#contributor").on("input", function () {
+    // se o utilizador alterar o NIF, limpa o estado anterior
+    if (this.value.trim() !== lastNifChecked) setNifStatus("", "");
+  });
+  $("#btnConsultNif").on("click", () => consultNIF(true));
+  if (getQueryParam("id")) $("#btnConsultNif").hide(); // edição: sem consulta
+
+  // Voltou a internet: repete a consulta que ficou pendente
+  window.addEventListener("online", () => {
+    if (nifWaitingForInternet && $("#contributor").val().trim()) {
+      nifWaitingForInternet = false;
+      consultNIF(true);
     }
   });
 

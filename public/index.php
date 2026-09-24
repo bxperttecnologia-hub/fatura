@@ -1,6 +1,28 @@
 <html>
 <?php
 require_once '../app/views/layout_creation.php';
+require_once '../app/config/db.php';
+require_once '../app/helpers/subscription.php';
+
+// =====================================================
+// PLANO CONTRATADO — controla o que é mostrado no dashboard
+// (ex.: BXPERT_BAZA/BXPERT_BASE só veem o relatório diário
+// e não têm acesso ao separador de Recursos Humanos, no
+// caso do BAZA).
+// =====================================================
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+$dashboardCompanyId = (int) ($_SESSION['user']['company_id'] ?? 0);
+$dashboardPlan = subscription_get_plan($pdo, $dashboardCompanyId);
+$dashboardReportsScope = subscription_reports_scope($dashboardPlan); // 'daily' | 'full'
+// Planos BXPERT_BAZA / BXPERT_BASE (relatório diário): layout próprio e filtro mensal.
+$isDailyPlan = ($dashboardReportsScope !== 'full');
+$dashboardCanRH = subscription_feature_allowed($dashboardPlan, 'rh');
+// Guardado para quando o separador de Stock for lançado; por agora ele
+// continua sempre oculto no HTML (ver mais abaixo), independentemente do plano.
+$dashboardCanStock = subscription_feature_allowed($dashboardPlan, 'stock');
 ?>
 
 <!-- OWL CAROUSEL -->
@@ -244,6 +266,12 @@ require_once '../app/views/layout_creation.php';
         height: 200px !important;
     }
 
+    /* Planos BXPERT_BAZA / BXPERT_BASE: card de Recebimentos acompanha a altura do Relatório Diário */
+    .card.daily-fill.top-cards {
+        height: auto !important;
+        min-height: 200px;
+    }
+
     /* ============================= */
     /* RESPONSIVIDADE EXTRA */
     /* ============================= */
@@ -370,13 +398,18 @@ require_once '../app/views/layout_creation.php';
                         <div class="d-flex justify-content-between col-12 col-sm-12">
                             <div class="tags">
                                 <a href="#" data-tag="sell" class="tag-link active btn">Vendas</a>
+                                <!-- Stock permanece oculto para todos os planos (módulo ainda não lançado) -->
                                 <a href="#" data-tag="stock" class="tag-link btn d-none">Stock</a>
-                                <a href="#" data-tag="rh" class="tag-link btn">Recursos Humanos</a>
+                                <a href="#" data-tag="rh" class="tag-link btn<?= $dashboardCanRH ? '' : ' d-none' ?>">Recursos Humanos</a>
                             </div>
                             <div class="mb-3">
                                 <div style="width: 180px !important; margin-right: -80px;" name="export" id="exportData">
-                                    <select id="yearSelect" class="form-select col-3 w-60" style="width: 100px;">
-                                    </select>
+                                    <?php if ($isDailyPlan): ?>
+                                        <select id="monthSelect" class="form-select" style="width: 100%;" aria-label="Mês"></select>
+                                    <?php else: ?>
+                                        <select id="yearSelect" class="form-select col-3 w-60" style="width: 100px;">
+                                        </select>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                         </div>
@@ -488,89 +521,100 @@ require_once '../app/views/layout_creation.php';
                                     <!-- ================== CARDS ================== -->
                                     <div class="row g-3 mb-4" id="top-cards">
 
-                                        <!-- CARD 1: Vendas este Ano -->
-                                        <div class="col-md-4 col-sm-6 col-12">
-                                            <div class="card card-custom top-cards p-3 h-100">
+                                        <?php if ($dashboardReportsScope === 'full'): ?>
+                                            <!-- CARD 1: Vendas este Ano -->
+                                            <div class="col-md-4 col-sm-6 col-12">
+                                                <div class="card card-custom top-cards p-3 h-100">
 
-                                                <!-- Cabeçalho: ícone + média mensal -->
-                                                <div class="d-flex justify-content-between align-items-start">
-                                                    <div class="icon-box">
-                                                        <i class="bi bi-coin text-primary"></i>
+                                                    <!-- Cabeçalho: ícone + média mensal -->
+                                                    <div class="d-flex justify-content-between align-items-start">
+                                                        <div class="icon-box">
+                                                            <i class="bi bi-coin text-primary"></i>
+                                                        </div>
+
+                                                        <div class="d-flex flex-column align-items-end">
+                                                            <small class="fw-semibold text-success" id="month_average" aria-live="polite">0</small>
+                                                            <span class="small-text text-muted">Média Mensal</span>
+                                                        </div>
                                                     </div>
 
-                                                    <div class="d-flex flex-column align-items-end">
-                                                        <small class="fw-semibold text-success" id="month_average" aria-live="polite">0</small>
-                                                        <span class="small-text text-muted">Média Mensal</span>
+                                                    <!-- Valor principal -->
+                                                    <h5 class="mt-3 mb-0 fw-semibold" id="trimestral_volume" aria-live="polite">0</h5>
+                                                    <span class="small-text text-muted">Vendas este Ano</span>
+
+                                                    <hr class="my-3 opacity-25">
+
+                                                    <!-- Rodapé: crescimento + sparkline -->
+                                                    <div class="d-flex justify-content-between align-items-center">
+                                                        <span id="trimestral_volume_dif"
+                                                            class="badge rounded-pill small fw-semibold"
+                                                            aria-live="polite">
+                                                        </span>
+
+                                                        <div style="width:80px;height:32px">
+                                                            <canvas id="spark1"></canvas>
+                                                        </div>
                                                     </div>
+
                                                 </div>
-
-                                                <!-- Valor principal -->
-                                                <h5 class="mt-3 mb-0 fw-semibold" id="trimestral_volume" aria-live="polite">0</h5>
-                                                <span class="small-text text-muted">Vendas este Ano</span>
-
-                                                <hr class="my-3 opacity-25">
-
-                                                <!-- Rodapé: crescimento + sparkline -->
-                                                <div class="d-flex justify-content-between align-items-center">
-                                                    <span id="trimestral_volume_dif"
-                                                        class="badge rounded-pill small fw-semibold"
-                                                        aria-live="polite">
-                                                    </span>
-
-                                                    <div style="width:80px;height:32px">
-                                                        <canvas id="spark1"></canvas>
-                                                    </div>
-                                                </div>
-
                                             </div>
-                                        </div>
 
-                                        <!-- CARD 2: Vendas este Mês -->
-                                        <div class="col-md-4 col-sm-6 col-12">
-                                            <div class="card card-custom top-cards p-3 h-100">
+                                            <!-- CARD 2: Vendas este Mês -->
+                                            <div class="col-md-4 col-sm-6 col-12">
+                                                <div class="card card-custom top-cards p-3 h-100">
 
-                                                <!-- Cabeçalho: ícone -->
-                                                <div class="d-flex justify-content-between align-items-start">
-                                                    <div class="icon-box">
-                                                        <i class="bi bi-graph-up text-success"></i>
+                                                    <!-- Cabeçalho: ícone -->
+                                                    <div class="d-flex justify-content-between align-items-start">
+                                                        <div class="icon-box">
+                                                            <i class="bi bi-graph-up text-success"></i>
+                                                        </div>
                                                     </div>
-                                                </div>
 
-                                                <!-- Valor principal -->
-                                                <h5 class="mt-3 mb-0 fw-semibold" id="month_sell" aria-live="polite">AOA 0</h5>
-                                                <span class="small-text text-muted">Vendas este Mês</span>
+                                                    <!-- Valor principal -->
+                                                    <h5 class="mt-3 mb-0 fw-semibold" id="month_sell" aria-live="polite">AOA 0</h5>
+                                                    <span class="small-text text-muted">Vendas este Mês</span>
 
-                                                <hr class="my-3 opacity-25">
+                                                    <hr class="my-3 opacity-25">
 
-                                                <!-- Rodapé: crescimento + sparkline -->
-                                                <div class="d-flex justify-content-between align-items-center">
-                                                    <span id="month_sell_dif"
-                                                        class="badge rounded-pill small fw-semibold"
-                                                        aria-live="polite">
-                                                    </span>
+                                                    <!-- Rodapé: crescimento + sparkline -->
+                                                    <div class="d-flex justify-content-between align-items-center">
+                                                        <span id="month_sell_dif"
+                                                            class="badge rounded-pill small fw-semibold"
+                                                            aria-live="polite">
+                                                        </span>
 
-                                                    <div style="width:80px;height:32px">
-                                                        <canvas id="spark3"></canvas>
+                                                        <div style="width:80px;height:32px">
+                                                            <canvas id="spark3"></canvas>
+                                                        </div>
                                                     </div>
-                                                </div>
 
+                                                </div>
                                             </div>
-                                        </div>
+                                        <?php endif; // $dashboardReportsScope === 'full' 
+                                        ?>
 
-                                        <!-- CARD 3: Recebimentos este Mês -->
-                                        <div class="col-md-4 col-sm-6 col-12">
-                                            <div class="card card-custom top-cards p-3 h-100 position-relative">
+                                        <!-- CARD 3: Recebimentos este Mês (inclui "A Receber este Mês") -->
+                                        <div class="<?= $isDailyPlan ? 'col-md-4 col-12' : 'col-md-4 col-sm-6 col-12' ?>">
+                                            <div class="card card-custom top-cards p-3 h-100 position-relative<?= $isDailyPlan ? ' daily-fill' : '' ?>">
 
-                                                <!-- Cabeçalho: ícone -->
+                                                <!-- Cabeçalho: ícone + a receber este mês -->
                                                 <div class="d-flex justify-content-between align-items-start">
                                                     <div class="icon-box">
                                                         <i class="bi bi-file-earmark-text text-primary"></i>
+                                                    </div>
+
+                                                    <div class="d-flex flex-column align-items-end">
+                                                        <span class="d-flex gap-1">
+                                                            <span class="small-text text-muted" id="a_receber_label">Pendente: </span>
+                                                            <small class="fw-semibold text-warning" id="a_receber_mensal" aria-live="polite">0</small>
+                                                        </span>
+                                                        <span class="small-text text-muted" id="a_receber_mensal_docs">&nbsp;</span>
                                                     </div>
                                                 </div>
 
                                                 <!-- Valor principal -->
                                                 <h5 class="mt-3 mb-0 fw-semibold" id="recebimento_mensal" aria-live="polite">0</h5>
-                                                <span class="small-text text-muted">Recebimentos este Mês</span>
+                                                <span class="small-text text-muted" id="recebimento_label">Recebimentos este Mês</span>
 
                                                 <hr class="my-3 opacity-25">
 
@@ -589,17 +633,70 @@ require_once '../app/views/layout_creation.php';
                                             </div>
                                         </div>
 
+
+                                        <?php if ($isDailyPlan): ?>
+                                            <!-- RELATÓRIO DIÁRIO: ao lado do card de Recebimentos -->
+                                            <div class="col-md-8 col-12">
+                                                <!-- ========= RELATÓRIO DIÁRIO (planos BXPERT_BAZA / BXPERT_BASE) ========= -->
+                                                <div class="card card-custom p-3 h-100" id="daily-report-card">
+                                                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                                                        <h6 class="h-title mb-0"><i class="bi bi-calendar-day"></i> Relatório Diário</h6>
+                                                        <span class="small text-muted" id="dailyReportDate"></span>
+                                                    </div>
+
+                                                    <div class="row g-3">
+                                                        <div class="col-md-4 col-6">
+                                                            <div class="p-3 border rounded-3 h-100">
+                                                                <div class="small-text text-muted">Faturado Hoje</div>
+                                                                <h5 class="mb-0 fw-semibold fs-6 text-break" id="daily_sales">0</h5>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-4 col-6">
+                                                            <div class="p-3 border rounded-3 h-100">
+                                                                <div class="small-text text-muted">Documentos Hoje</div>
+                                                                <h5 class="mb-0 fw-semibold fs-6 text-break" id="daily_docs">0</h5>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-4 col-6">
+                                                            <div class="p-3 border rounded-3 h-100">
+                                                                <div class="small-text text-muted">Recebido Hoje</div>
+                                                                <h5 class="mb-0 fw-semibold fs-6 text-break" id="daily_received">0</h5>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- <div class="alert alert-light border small mt-3 mb-0">
+                                                        <i class="bi bi-info-circle"></i>
+                                                        O plano <strong><?= htmlspecialchars($dashboardPlan['name']) ?></strong> disponibiliza apenas o relatório diário.
+                                                        Faça upgrade para aceder à evolução anual e aos relatórios comparativos.
+                                                    </div> -->
+                                                </div>
+                                            </div>
+                                        <?php endif; ?>
+
                                     </div>
 
-                                    <!-- ================== GRÁFICO ================== -->
-                                    <div class="card card-custom p-4" id="chart-card">
-                                        <div class="d-flex justify-content-between mb-3">
-                                            <h6 class="h-title"><i class="bi bi-graph-up"></i> Evolução Anual</h6>
+                                    <?php if ($dashboardReportsScope === 'full'): ?>
+                                        <!-- ================== GRÁFICO ================== -->
+                                        <div class="card card-custom p-4" id="chart-card">
+                                            <div class="d-flex justify-content-between mb-3">
+                                                <h6 class="h-title"><i class="bi bi-graph-up"></i> Evolução Anual</h6>
+                                            </div>
+                                            <div style="height: 400px;">
+                                                <canvas id="chart"></canvas>
+                                            </div>
                                         </div>
-                                        <div style="height: 400px;">
-                                            <canvas id="chart"></canvas>
+                                    <?php else: ?>
+                                        <!-- ========= PRINCIPAIS CLIENTES (planos diários: por baixo do relatório) ========= -->
+                                        <div class="card card-custom p-3" id="clients">
+                                            <div class="d-flex justify-content-between mb-3">
+                                                <h6 class="mb-3 h-title"><i class="bi bi-people"></i> Principais Clientes</h6>
+                                            </div>
+
+                                            <div class="col-12" id="topClients"></div>
                                         </div>
-                                    </div>
+                                    <?php endif; // $dashboardReportsScope 
+                                    ?>
 
                                 </div>
 
@@ -619,13 +716,16 @@ require_once '../app/views/layout_creation.php';
                                         </div>
                                     </div>
 
-                                    <div class="card card-custom p-3" id="clients">
-                                        <div class="d-flex justify-content-between mb-3">
-                                            <h6 class="mb-3 h-title"><i class="bi bi-people"></i> Principais Clientes</h6>
-                                        </div>
+                                    <?php if (!$isDailyPlan): ?>
+                                        <div class="card card-custom p-3" id="clients">
+                                            <div class="d-flex justify-content-between mb-3">
+                                                <h6 class="mb-3 h-title"><i class="bi bi-people"></i> Principais Clientes</h6>
+                                            </div>
 
-                                        <div class="col-12" id="topClients"></div>
-                                    </div>
+                                            <div class="col-12" id="topClients"></div>
+                                        </div>
+                                    <?php endif; // clients: só nos planos completos 
+                                    ?>
 
                                 </div>
 
@@ -634,180 +734,183 @@ require_once '../app/views/layout_creation.php';
 
 
                         <!-- Sessao Gestao de RH -->
-                        <div class="col-12 tag-content" data-tag-content="rh">
-                            <!-- CARDS -->
-                            <div class="row g-3 mb-4">
+                        <?php if ($dashboardCanRH): ?>
+                            <div class="col-12 tag-content" data-tag-content="rh">
+                                <!-- CARDS -->
+                                <div class="row g-3 mb-4">
 
-                                <!-- CARD 1: Funcionários Ativos -->
-                                <div class="col-12 col-md-3">
-                                    <div class="card card-custom p-3 h-100">
+                                    <!-- CARD 1: Funcionários Ativos -->
+                                    <div class="col-12 col-md-3">
+                                        <div class="card card-custom p-3 h-100">
 
-                                        <!-- Cabeçalho: ícone -->
-                                        <div class="d-flex justify-content-between align-items-start">
-                                            <div class="icon-box rounded-3 d-flex align-items-center justify-content-center">
-                                                <i class="bi bi-people"></i>
+                                            <!-- Cabeçalho: ícone -->
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div class="icon-box rounded-3 d-flex align-items-center justify-content-center">
+                                                    <i class="bi bi-people"></i>
+                                                </div>
                                             </div>
-                                        </div>
 
-                                        <!-- Valor principal -->
-                                        <h5 class="mt-3 mb-0 fw-semibold" id="rh_total_employees" aria-live="polite">0</h5>
-                                        <span class="small-text text-muted">Total funcionários activos</span>
+                                            <!-- Valor principal -->
+                                            <h5 class="mt-3 mb-0 fw-semibold" id="rh_total_employees" aria-live="polite">0</h5>
+                                            <span class="small-text text-muted">Total funcionários activos</span>
 
-                                        <hr class="my-3 opacity-25">
+                                            <hr class="my-3 opacity-25">
 
-                                        <!-- Rodapé: variação + sparkline -->
-                                        <div class="d-flex justify-content-between align-items-center">
-                                            <span id="rh_total_employees_dif"
-                                                class="badge rounded-pill small fw-semibold"
-                                                aria-live="polite">
-                                            </span>
+                                            <!-- Rodapé: variação + sparkline -->
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <span id="rh_total_employees_dif"
+                                                    class="badge rounded-pill small fw-semibold"
+                                                    aria-live="polite">
+                                                </span>
 
-                                            <div style="width:80px;height:32px">
-                                                <canvas id="spark5"></canvas>
+                                                <div style="width:80px;height:32px">
+                                                    <canvas id="spark5"></canvas>
+                                                </div>
                                             </div>
-                                        </div>
 
+                                        </div>
                                     </div>
+
+                                    <!-- CARD 2: Custo Salarial Mensal -->
+                                    <div class="col-12 col-md-3">
+                                        <div class="card card-custom p-3 h-100">
+
+                                            <!-- Cabeçalho: ícone -->
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div class="icon-box rounded-3 d-flex align-items-center justify-content-center">
+                                                    <i class="bi bi-cash-stack"></i>
+                                                </div>
+                                            </div>
+
+                                            <!-- Valor principal -->
+                                            <h5 class="mt-3 mb-0 fw-semibold" id="rh_total_salary" aria-live="polite">AOA 0</h5>
+                                            <span class="small-text text-muted">Custo salárial mensal</span>
+
+                                            <hr class="my-3 opacity-25">
+
+                                            <!-- Rodapé: variação + sparkline -->
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <span id="rh_total_salary_dif"
+                                                    class="badge rounded-pill small fw-semibold"
+                                                    aria-live="polite">
+                                                </span>
+
+                                                <div style="width:80px;height:32px">
+                                                    <canvas id="spark6"></canvas>
+                                                </div>
+                                            </div>
+
+                                        </div>
+                                    </div>
+
+                                    <!-- CARD 3: Férias este Mês -->
+                                    <div class="col-12 col-md-3">
+                                        <div class="card card-custom p-3 h-100">
+
+                                            <!-- Cabeçalho: ícone -->
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div class="icon-box rounded-3 d-flex align-items-center justify-content-center">
+                                                    <i class="bi bi-file-earmark-text"></i>
+                                                </div>
+                                            </div>
+
+                                            <!-- Valor principal -->
+                                            <h5 class="mt-3 mb-0 fw-semibold" id="rh_pending_vacations" aria-live="polite">0</h5>
+                                            <span class="small-text text-muted">Férias este Mês</span>
+
+                                            <hr class="my-3 opacity-25">
+
+                                            <!-- Rodapé: variação + sparkline -->
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <span id="rh_pending_vacations_dif"
+                                                    class="badge rounded-pill small fw-semibold"
+                                                    aria-live="polite">
+                                                </span>
+
+                                                <div style="width:80px;height:32px">
+                                                    <canvas id="spark7"></canvas>
+                                                </div>
+                                            </div>
+
+                                        </div>
+                                    </div>
+
+                                    <!-- CARD 4: Faltas no Mês -->
+                                    <div class="col-12 col-md-3">
+                                        <div class="card card-custom p-3 h-100">
+
+                                            <!-- Cabeçalho: ícone -->
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div class="icon-box rounded-3 d-flex align-items-center justify-content-center">
+                                                    <i class="bi bi-person-x"></i>
+                                                </div>
+                                            </div>
+
+                                            <!-- Valor principal -->
+                                            <h5 class="mt-3 mb-0 fw-semibold" id="rh_absences" aria-live="polite">0</h5>
+                                            <span class="small-text text-muted">Faltas no mês</span>
+
+                                            <hr class="my-3 opacity-25">
+
+                                            <!-- Rodapé: variação + sparkline -->
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <span id="rh_absences_month_dif"
+                                                    class="badge rounded-pill small fw-semibold"
+                                                    aria-live="polite">
+                                                </span>
+
+                                                <div style="width:80px;height:32px">
+                                                    <canvas id="spark8"></canvas>
+                                                </div>
+                                            </div>
+
+                                        </div>
+                                    </div>
+
                                 </div>
 
-                                <!-- CARD 2: Custo Salarial Mensal -->
-                                <div class="col-12 col-md-3">
-                                    <div class="card card-custom p-3 h-100">
-
-                                        <!-- Cabeçalho: ícone -->
-                                        <div class="d-flex justify-content-between align-items-start">
-                                            <div class="icon-box rounded-3 d-flex align-items-center justify-content-center">
-                                                <i class="bi bi-cash-stack"></i>
-                                            </div>
-                                        </div>
-
-                                        <!-- Valor principal -->
-                                        <h5 class="mt-3 mb-0 fw-semibold" id="rh_total_salary" aria-live="polite">AOA 0</h5>
-                                        <span class="small-text text-muted">Custo salárial mensal</span>
-
-                                        <hr class="my-3 opacity-25">
-
-                                        <!-- Rodapé: variação + sparkline -->
-                                        <div class="d-flex justify-content-between align-items-center">
-                                            <span id="rh_total_salary_dif"
-                                                class="badge rounded-pill small fw-semibold"
-                                                aria-live="polite">
-                                            </span>
-
-                                            <div style="width:80px;height:32px">
-                                                <canvas id="spark6"></canvas>
-                                            </div>
-                                        </div>
-
-                                    </div>
-                                </div>
-
-                                <!-- CARD 3: Férias este Mês -->
-                                <div class="col-12 col-md-3">
-                                    <div class="card card-custom p-3 h-100">
-
-                                        <!-- Cabeçalho: ícone -->
-                                        <div class="d-flex justify-content-between align-items-start">
-                                            <div class="icon-box rounded-3 d-flex align-items-center justify-content-center">
-                                                <i class="bi bi-file-earmark-text"></i>
-                                            </div>
-                                        </div>
-
-                                        <!-- Valor principal -->
-                                        <h5 class="mt-3 mb-0 fw-semibold" id="rh_pending_vacations" aria-live="polite">0</h5>
-                                        <span class="small-text text-muted">Férias este Mês</span>
-
-                                        <hr class="my-3 opacity-25">
-
-                                        <!-- Rodapé: variação + sparkline -->
-                                        <div class="d-flex justify-content-between align-items-center">
-                                            <span id="rh_pending_vacations_dif"
-                                                class="badge rounded-pill small fw-semibold"
-                                                aria-live="polite">
-                                            </span>
-
-                                            <div style="width:80px;height:32px">
-                                                <canvas id="spark7"></canvas>
-                                            </div>
-                                        </div>
-
-                                    </div>
-                                </div>
-
-                                <!-- CARD 4: Faltas no Mês -->
-                                <div class="col-12 col-md-3">
-                                    <div class="card card-custom p-3 h-100">
-
-                                        <!-- Cabeçalho: ícone -->
-                                        <div class="d-flex justify-content-between align-items-start">
-                                            <div class="icon-box rounded-3 d-flex align-items-center justify-content-center">
-                                                <i class="bi bi-person-x"></i>
-                                            </div>
-                                        </div>
-
-                                        <!-- Valor principal -->
-                                        <h5 class="mt-3 mb-0 fw-semibold" id="rh_absences" aria-live="polite">0</h5>
-                                        <span class="small-text text-muted">Faltas no mês</span>
-
-                                        <hr class="my-3 opacity-25">
-
-                                        <!-- Rodapé: variação + sparkline -->
-                                        <div class="d-flex justify-content-between align-items-center">
-                                            <span id="rh_absences_month_dif"
-                                                class="badge rounded-pill small fw-semibold"
-                                                aria-live="polite">
-                                            </span>
-
-                                            <div style="width:80px;height:32px">
-                                                <canvas id="spark8"></canvas>
-                                            </div>
-                                        </div>
-
-                                    </div>
-                                </div>
-
-                            </div>
-
-                            <!-- NOVO: gráfico de faltas por mês, dando ao RH
+                                <!-- NOVO: gráfico de faltas por mês, dando ao RH
                                  o mesmo peso visual que o módulo de Vendas -->
-                            <div class="card card-custom p-4 mt-3">
-                                <div class="d-flex justify-content-between mb-3">
-                                    <h6 class="h-title"><i class="bi bi-graph-up"></i> Custo Salarial mensal</h6>
-                                </div>
-                                <div style="height: 260px;">
-                                    <canvas id="rhSalaryChart"></canvas>
-                                </div>
-                            </div>
-
-                            <!-- LISTAS -->
-                            <div class="row g-3 mt-2">
-
-                                <!-- FÉRIAS -->
-                                <div class="col-12 col-lg-6">
-                                    <div class="card card-custom p-3">
-                                        <div class="d-flex justify-content-between">
-                                            <h6 class="fw-semibold mb-3 h-title"><i class="bi bi-list"></i>Férias Pendentes</h6>
-                                            <a href="vacations.php" class="small text-green">Ver todos <i class="bi bi-chevron-right"></i></a>
-                                        </div>
-
-                                        <div class="col-12" id="rh_pending_vacations_list"></div>
+                                <div class="card card-custom p-4 mt-3">
+                                    <div class="d-flex justify-content-between mb-3">
+                                        <h6 class="h-title"><i class="bi bi-graph-up"></i> Custo Salarial mensal</h6>
+                                    </div>
+                                    <div style="height: 260px;">
+                                        <canvas id="rhSalaryChart"></canvas>
                                     </div>
                                 </div>
 
-                                <!-- FALTAS -->
-                                <div class="col-12 col-lg-6">
-                                    <div class="card card-custom p-3">
-                                        <div class="d-flex justify-content-between">
-                                            <h6 class="fw-semibold mb-3 h-title"><i class="bi bi-list"></i>Funcionários com Mais Faltas</h6>
-                                            <a href="ponto.php" class="small text-green">Ver todos <i class="bi bi-chevron-right"></i></a>
+                                <!-- LISTAS -->
+                                <div class="row g-3 mt-2">
+
+                                    <!-- FÉRIAS -->
+                                    <div class="col-12 col-lg-6">
+                                        <div class="card card-custom p-3">
+                                            <div class="d-flex justify-content-between">
+                                                <h6 class="fw-semibold mb-3 h-title"><i class="bi bi-list"></i>Férias Pendentes</h6>
+                                                <a href="vacations.php" class="small text-green">Ver todos <i class="bi bi-chevron-right"></i></a>
+                                            </div>
+
+                                            <div class="col-12" id="rh_pending_vacations_list"></div>
                                         </div>
-                                        <div class="col-12" id="rh_recent_absences_list"></div>
                                     </div>
+
+                                    <!-- FALTAS -->
+                                    <div class="col-12 col-lg-6">
+                                        <div class="card card-custom p-3">
+                                            <div class="d-flex justify-content-between">
+                                                <h6 class="fw-semibold mb-3 h-title"><i class="bi bi-list"></i>Funcionários com Mais Faltas</h6>
+                                                <a href="ponto.php" class="small text-green">Ver todos <i class="bi bi-chevron-right"></i></a>
+                                            </div>
+                                            <div class="col-12" id="rh_recent_absences_list"></div>
+                                        </div>
+                                    </div>
+
                                 </div>
 
                             </div>
-
-                        </div>
+                        <?php endif; // $dashboardCanRH 
+                        ?>
 
                         <!-- Sessao Gestao de Stock -->
                         <div class="col-12 tag-content" data-tag-content="stock">
@@ -906,8 +1009,6 @@ require_once '../app/views/layout_creation.php';
 require_once '../app/views/footer.php';
 ?>
 
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/OwlCarousel2/2.3.4/owl.carousel.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="../vendor/fontawesome-free-5.15.4-web/js/all.js"></script>
@@ -920,6 +1021,9 @@ require_once '../app/views/footer.php';
 
     const currentYear = new Date().getFullYear();
     let selectedYear = new Date().getFullYear();
+    // Planos BXPERT_BAZA / BXPERT_BASE: o filtro do dashboard é mensal
+    const isDailyPlan = <?= $isDailyPlan ? 'true' : 'false' ?>;
+    let selectedMonth = new Date().getMonth() + 1;
 
     const userEl = document.getElementById("user_id");
     const companyEl = document.getElementById("company_id");
@@ -1061,20 +1165,27 @@ require_once '../app/views/footer.php';
             method: 'GET',
             dataType: 'json',
             data: {
-                year: selectedYear
+                year: selectedYear,
+                month: isDailyPlan ? selectedMonth : undefined
             },
 
             success: function(res) {
 
                 if (!res?.success || !Array.isArray(res.data)) return;
 
+                // Planos diários: mostra só as faturas do mês seleccionado
+                const monthKey = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+                const invoices = isDailyPlan ?
+                    res.data.filter(inv => String(inv.issue_date || '').slice(0, 7) === monthKey) :
+                    res.data;
+
                 let html = '';
 
-                if (res.data.length === 0) {
+                if (invoices.length === 0) {
                     html = `<div class="p-3 text-center text-muted small">Sem faturas neste período</div>`;
                 }
 
-                res.data.forEach(inv => {
+                invoices.forEach(inv => {
                     // Trunca nomes longos com título completo no hover
                     const clientName = inv.client_name ?? '';
                     const displayName = clientName.length > 22 ?
@@ -1114,8 +1225,8 @@ require_once '../app/views/footer.php';
                 carousel = $('#invoiceCarousel').owlCarousel({
                     items: 1.2,
                     margin: 10,
-                    loop: res.data.length > 1,
-                    autoplay: res.data.length > 1,
+                    loop: invoices.length > 1,
+                    autoplay: invoices.length > 1,
                     autoplayTimeout: 3000,
                     autoplayHoverPause: true,
                     dots: false,
@@ -1165,7 +1276,8 @@ require_once '../app/views/footer.php';
             data: {
                 company_id,
                 user_id,
-                year: selectedYear
+                year: selectedYear,
+                month: isDailyPlan ? selectedMonth : undefined
             },
             dataType: 'json',
 
@@ -1284,7 +1396,8 @@ require_once '../app/views/footer.php';
             data: {
                 company_id,
                 user_id,
-                year: selectedYear
+                year: selectedYear,
+                month: isDailyPlan ? selectedMonth : undefined
             },
             dataType: 'json',
 
@@ -1306,6 +1419,16 @@ require_once '../app/views/footer.php';
         $("#month_sell").text(formatCurrency(kpis.venda_periodo));
         $("#total_docs").text(formatCurrency(kpis.volume_liquid || 0));
         $("#recebimento_mensal").text(formatCurrency(kpis.volume_liquid_mensal || 0));
+        $("#a_receber_mensal").text(formatCurrency(kpis.a_receber_mensal || 0));
+
+        if (kpis.a_receber_documentos !== undefined) {
+            const n = Number(kpis.a_receber_documentos) || 0;
+            $("#a_receber_mensal_docs").text(
+                n === 0 ?
+                "Sem faturas por receber" :
+                `${n} fatura${n === 1 ? "" : "s"} por receber`
+            );
+        }
 
         // CORRIGIDO: agora trata null como "sem dados anteriores"
         // em vez de mostrar -100% quando não há histórico real
@@ -1348,12 +1471,117 @@ require_once '../app/views/footer.php';
     }
 
     /* =============================
+    🔹 RELATÓRIO DIÁRIO (planos com
+       acesso apenas ao relatório do dia)
+    ============================= */
+    function getDailyReport() {
+        // O card só existe no DOM para planos com "reports" = 'daily'.
+        // Se não existir, não há nada a carregar.
+        if (!document.getElementById("daily-report-card")) return;
+        if (!company_id) return;
+
+        $.ajax({
+            url: `index/ajax/get_daily_report.php`,
+            method: 'GET',
+            data: {
+                company_id
+            },
+            dataType: 'json',
+
+            success: function(res) {
+                if (!res?.success) return;
+
+                const d = res.data || {};
+
+                $("#daily_sales").text(formatCurrency(d.faturado_hoje || 0));
+                $("#daily_docs").text(d.documentos_hoje ?? 0);
+                $("#daily_received").text(formatCurrency(d.recebido_hoje || 0));
+
+                if (d.data_referencia) {
+                    $("#dailyReportDate").text(d.data_referencia);
+                }
+            },
+            error: function(xhr) {
+                console.error("AJAX ERROR RELATÓRIO DIÁRIO:", xhr.responseText);
+            }
+        });
+    }
+
+    /* =============================
+    🔹 FILTRO MENSAL (planos BXPERT_BAZA / BXPERT_BASE)
+    ============================= */
+    const MONTH_NAMES = [
+        'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ];
+
+    function updateMonthLabels() {
+        if (!isDailyPlan) return;
+
+        const now = new Date();
+        const isCurrent = selectedYear === now.getFullYear() && selectedMonth === now.getMonth() + 1;
+        const name = MONTH_NAMES[selectedMonth - 1];
+
+        $("#recebimento_label").text(isCurrent ? "Recebimentos este Mês" : `Recebimentos em ${name}`);
+        $("#a_receber_label").text("Pendente: ");
+    }
+
+    function renderMonthSelect(apiData) {
+        const sel = document.getElementById("monthSelect");
+        if (!sel) return;
+
+        const now = new Date();
+        const curY = now.getFullYear();
+        const curM = now.getMonth() + 1;
+
+        const years = (apiData?.yearsInvoices || []).map(y => Number(y.ano)).filter(Boolean);
+        const firstYear = years.length ? Math.min(...years, curY) : curY;
+
+        // do mês actual para trás, até ao primeiro ano com faturas
+        const options = [];
+        for (let y = curY; y >= firstYear; y--) {
+            for (let m = (y === curY ? curM : 12); m >= 1; m--) {
+                options.push({
+                    value: `${y}-${String(m).padStart(2, '0')}`,
+                    label: `${MONTH_NAMES[m - 1]} ${y}`
+                });
+            }
+        }
+
+        // só reconstrói se a lista mudou (o refresh de 30s não deve fechar o dropdown aberto)
+        if (sel.options.length !== options.length) {
+            sel.innerHTML = options.map(o => `<option value="${o.value}">${o.label}</option>`).join("");
+        }
+
+        sel.value = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+
+        sel.onchange = () => {
+            const [y, m] = sel.value.split("-").map(Number);
+            selectedYear = y;
+            selectedMonth = m;
+
+            updateMonthLabels();
+            loadInvoices();
+            getInsightsNumber();
+            loadRHData();
+            loadStockDashboard();
+        };
+
+        updateMonthLabels();
+    }
+
+    /* =============================
     🔹 CHART
     ============================= */
 
     function renderGraphics(apiData) {
 
         currentData = apiData;
+
+        if (isDailyPlan) {
+            renderMonthSelect(apiData);
+            return;
+        }
 
         const yearsInvoices = apiData?.yearsInvoices || [];
 
@@ -1947,7 +2175,8 @@ require_once '../app/views/footer.php';
                 getInsightsNumber(),
                 loadInvoices(),
                 loadRHData(),
-                loadStockDashboard()
+                loadStockDashboard(),
+                getDailyReport()
             ]);
 
         } catch (error) {
@@ -1979,6 +2208,8 @@ require_once '../app/views/footer.php';
     }
 
     $(document).ready(() => {
+
+        if (isDailyPlan) renderMonthSelect(null);
 
         startDashboardRefresh();
 

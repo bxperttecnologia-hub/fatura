@@ -20,14 +20,14 @@ try {
     c.country AS 'País', 
     c.city AS 'Cidade', 
     c.email AS 'E-mail', 
-    CONCAT('(+', c.telephone_ddi, ') ', c.telephone) AS 'Telefone', 
-    CONCAT('(+', c.cellphone_ddi, ') ', c.cellphone) AS 'Telemóvel', 
+    c.telephone AS 'Telefone', 
+    c.cellphone AS 'Telemóvel', 
     c.po_box AS 'Caixa Postal', 
     c.fax AS 'Fax', 
     c.pref_name AS 'Nome - Contato Preferencial', 
     c.pref_email AS 'E-mail - Contato Preferencial',  
-    CONCAT('(+', c.pref_telephone_ddi, ') ', c.pref_telephone) AS 'Telefone - Contato Preferencial', 
-    CONCAT('(+', c.pref_cellphone_ddi, ') ', c.pref_cellphone) AS 'Telemóvel - Contato Preferencial', 
+    c.pref_telephone AS 'Telefone - Contato Preferencial', 
+    c.pref_cellphone AS 'Telemóvel - Contato Preferencial', 
     CASE 
         WHEN c.numberCopys = 1 THEN 'Original' 
         WHEN c.numberCopys = 2 THEN 'Duplicado'  
@@ -35,7 +35,7 @@ try {
         ELSE 'Desconhecido' 
     END AS 'Nº de Cópias', 
     c.observations, 
-    CONCAT(c.due_date, ' Dias') AS 'Vencimento', 
+    CASE WHEN c.due_date = 0 THEN 'Pronto pagamento' ELSE CONCAT(c.due_date, ' Dias') END AS 'Vencimento', 
     ct.name AS 'Idioma', 
     p.name AS 'Metodo de Pagamento', 
     CONCAT(cr.currency, ' (', cr.iso_code, ')') AS 'Moeda', 
@@ -48,9 +48,9 @@ LEFT JOIN payment_methods_contacts p ON p.code = c.payment_method
 LEFT JOIN currencies cr ON cr.iso_code = c.currency 
 WHERE cp.id = :company_id");
 
-$stmt->bindParam(':company_id', $_SESSION['user']['company_id'], PDO::PARAM_INT);
-$stmt->execute();  
-$contacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $stmt->bindParam(':company_id', $_SESSION['user']['company_id'], PDO::PARAM_INT);
+    $stmt->execute();
+    $contacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     if (!$contacts) {
         // Para PDF, gerar um PDF com uma mensagem de "nenhum contato"
@@ -130,11 +130,11 @@ $contacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
         $writer = new Xlsx($spreadsheet);
         $writer->save("php://output");
         exit;
-    }  elseif ($type === "pdf") {
+    } elseif ($type === "pdf") {
 
-    $dompdf = new Dompdf();
+        $dompdf = new Dompdf();
 
-    $html = '
+        $html = '
     <!DOCTYPE html>
     <html>
     <head>
@@ -265,40 +265,40 @@ $contacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
     </div>
     ';
 
-    foreach ($contacts as $contact) {
+        foreach ($contacts as $contact) {
 
-        $phones = array_unique(array_filter([
-            $contact['Telefone'] ?? null,
-            $contact['Telemóvel'] ?? null,
-            !empty($contact['Telefone - Contato Preferencial']) ? $contact['Telefone - Contato Preferencial'] . ' (Pref)' : null,
-            !empty($contact['Telemóvel - Contato Preferencial']) ? $contact['Telemóvel - Contato Preferencial'] . ' (Pref)' : null,
-        ]));
+            $phones = array_unique(array_filter([
+                $contact['Telefone'] ?? null,
+                $contact['Telemóvel'] ?? null,
+                !empty($contact['Telefone - Contato Preferencial']) ? $contact['Telefone - Contato Preferencial'] . ' (Pref)' : null,
+                !empty($contact['Telemóvel - Contato Preferencial']) ? $contact['Telemóvel - Contato Preferencial'] . ' (Pref)' : null,
+            ]));
 
-        $emails = array_unique(array_filter([
-            $contact['E-mail'] ?? null,
-            $contact['E-mail - Contato Preferencial'] ?? null,
-        ]));
+            $emails = array_unique(array_filter([
+                $contact['E-mail'] ?? null,
+                $contact['E-mail - Contato Preferencial'] ?? null,
+            ]));
 
-        $address = implode(', ', array_filter([
-            $contact['Endereço'] ?? null,
-            $contact['Cidade'] ?? null,
-            $contact['País'] ?? null,
-        ]));
+            $address = implode(', ', array_filter([
+                $contact['Endereço'] ?? null,
+                $contact['Cidade'] ?? null,
+                $contact['País'] ?? null,
+            ]));
 
-        $html .= '<div class="contact-card">';
+            $html .= '<div class="contact-card">';
 
-        $html .= '
+            $html .= '
         <table class="card-top">
             <tr>
                 <td>
                     <span class="contact-name">' . htmlspecialchars($contact['Nome do Contacto'] ?? 'Sem Nome') . '</span>
         ';
 
-        if (!empty($contact['Nome da empresa'])) {
-            $html .= ' <span style="color:#ccc;">|</span> <span class="company-name">' . htmlspecialchars($contact['Nome da empresa']) . '</span>';
-        }
+            if (!empty($contact['Nome da empresa'])) {
+                $html .= ' <span style="color:#ccc;">|</span> <span class="company-name">' . htmlspecialchars($contact['Nome da empresa']) . '</span>';
+            }
 
-        $html .= '
+            $html .= '
                 </td>
                 <td align="right" width="120">
                     <span class="contact-type">' . htmlspecialchars($contact['Tipo'] ?? 'Geral') . '</span>
@@ -307,74 +307,73 @@ $contacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
         </table>
         ';
 
-        $html .= '<table class="details"><tr>';
+            $html .= '<table class="details"><tr>';
 
-        $html .= '<td width="60%">';
+            $html .= '<td width="60%">';
 
-        if ($emails) {
-            $html .= '<div class="info-row"><span class="icon">&#9993;</span><span class="info-text">' . htmlspecialchars(implode(' • ', $emails)) . '</span></div>';
+            if ($emails) {
+                $html .= '<div class="info-row"><span class="icon">&#9993;</span><span class="info-text">' . htmlspecialchars(implode(' • ', $emails)) . '</span></div>';
+            }
+
+            if ($phones) {
+                $html .= '<div class="info-row"><span class="icon">&#9742;</span><span class="info-text">' . htmlspecialchars(implode(' • ', $phones)) . '</span></div>';
+            }
+
+            if ($address) {
+                $html .= '<div class="info-row"><span class="icon">&#8962;</span><span class="info-text">' . htmlspecialchars($address) . '</span></div>';
+            }
+
+            if (!empty($contact['Website'])) {
+                $html .= '<div class="info-row"><span class="icon">&#127760;</span><span class="info-text">' . htmlspecialchars($contact['Website']) . '</span></div>';
+            }
+
+            $html .= '</td><td width="40%">';
+
+            if (!empty($contact['Contribuinte'])) {
+                $html .= '<div class="info-row"><span class="label">NIF:</span>' . htmlspecialchars($contact['Contribuinte']) . '</div>';
+            }
+
+            if (!empty($contact['Metodo de Pagamento'])) {
+                $html .= '<div class="info-row"><span class="label">Pagamento:</span>' . htmlspecialchars($contact['Metodo de Pagamento']) . '</div>';
+            }
+
+            if (!empty($contact['Moeda'])) {
+                $html .= '<div class="info-row"><span class="label">Moeda:</span>' . htmlspecialchars($contact['Moeda']) . '</div>';
+            }
+
+            if (!empty($contact['Vencimento'])) {
+                $html .= '<div class="info-row"><span class="label">Vencimento:</span>' . htmlspecialchars($contact['Vencimento']) . '</div>';
+            }
+
+            $html .= '</td></tr></table>';
+
+            if (!empty($contact['observations'])) {
+                $html .= '<div class="obs">Obs: ' . nl2br(htmlspecialchars($contact['observations'])) . '</div>';
+            }
+
+            $html .= '</div>';
         }
 
-        if ($phones) {
-            $html .= '<div class="info-row"><span class="icon">&#9742;</span><span class="info-text">' . htmlspecialchars(implode(' • ', $phones)) . '</span></div>';
-        }
+        $html .= '</body></html>';
 
-        if ($address) {
-            $html .= '<div class="info-row"><span class="icon">&#8962;</span><span class="info-text">' . htmlspecialchars($address) . '</span></div>';
-        }
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->render();
 
-        if (!empty($contact['Website'])) {
-            $html .= '<div class="info-row"><span class="icon">&#127760;</span><span class="info-text">' . htmlspecialchars($contact['Website']) . '</span></div>';
-        }
+        // Rodapé DEFINITIVO via canvas
+        $canvas = $dompdf->getCanvas();
+        $font   = $dompdf->getFontMetrics()->getFont("DejaVu Sans");
 
-        $html .= '</td><td width="40%">';
+        $width  = $canvas->get_width();
+        $height = $canvas->get_height();
+        $y      = $height - 30;
 
-        if (!empty($contact['Contribuinte'])) {
-            $html .= '<div class="info-row"><span class="label">NIF:</span>' . htmlspecialchars($contact['Contribuinte']) . '</div>';
-        }
+        $canvas->page_text(40, $y, "Relatório de Contatos - Bxpert", $font, 8, [120, 120, 120]);
+        $canvas->page_text($width - 140, $y, "Página {PAGE_NUM} de {PAGE_COUNT}", $font, 8, [120, 120, 120]);
 
-        if (!empty($contact['Metodo de Pagamento'])) {
-            $html .= '<div class="info-row"><span class="label">Pagamento:</span>' . htmlspecialchars($contact['Metodo de Pagamento']) . '</div>';
-        }
-
-        if (!empty($contact['Moeda'])) {
-            $html .= '<div class="info-row"><span class="label">Moeda:</span>' . htmlspecialchars($contact['Moeda']) . '</div>';
-        }
-
-        if (!empty($contact['Vencimento'])) {
-            $html .= '<div class="info-row"><span class="label">Vencimento:</span>' . htmlspecialchars($contact['Vencimento']) . '</div>';
-        }
-
-        $html .= '</td></tr></table>';
-
-        if (!empty($contact['observations'])) {
-            $html .= '<div class="obs">Obs: ' . nl2br(htmlspecialchars($contact['observations'])) . '</div>';
-        }
-
-        $html .= '</div>';
+        $dompdf->stream("Relatório de Contatos - Bxpert.pdf", ["Attachment" => true]);
+        exit;
     }
-
-    $html .= '</body></html>';
-
-    $dompdf->loadHtml($html);
-    $dompdf->setPaper('A4', 'portrait');
-    $dompdf->render();
-
-    // Rodapé DEFINITIVO via canvas
-    $canvas = $dompdf->getCanvas();
-    $font   = $dompdf->getFontMetrics()->getFont("DejaVu Sans");
-
-    $width  = $canvas->get_width();
-    $height = $canvas->get_height();
-    $y      = $height - 30;
-
-    $canvas->page_text(40, $y, "Relatório de Contatos - Bxpert", $font, 8, [120,120,120]);
-    $canvas->page_text($width - 140, $y, "Página {PAGE_NUM} de {PAGE_COUNT}", $font, 8, [120,120,120]);
-
-    $dompdf->stream("Relatório de Contatos - Bxpert.pdf", ["Attachment" => true]);
-    exit;
-}
-
 } catch (Exception $e) {
     die("Erro ao gerar arquivo: " . $e->getMessage());
 }

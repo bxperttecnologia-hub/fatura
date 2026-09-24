@@ -1,6 +1,7 @@
 <?php
 require_once '../../../app/config/db.php';
 require_once '../../../app/helpers/subscription.php';
+require_once '../../../app/helpers/anonymous_contact.php';
 
 header('Content-Type: application/json');
 session_start();
@@ -26,14 +27,23 @@ unset($fatura['edit_invoice_id']);
 try {
     $pdo->beginTransaction();
 
-    // 🔐 Validação sessão
-    $companyIdSession = (int)($_POST['company_id'] ?? 0);
-    if (!$companyIdSession) {
+    // 🔐 Validação sessão — nunca confiar em company_id/user_id vindos do POST
+    if (empty($_SESSION['user']['company_id']) || empty($_SESSION['user']['id'])) {
         throw new Exception("Sessão inválida.");
     }
 
+    $companyIdSession = (int)$_SESSION['user']['company_id'];
+    $userIdSession = (int)$_SESSION['user']['id'];
+
     if ($editInvoiceId <= 0) {
         throw new Exception("ID da fatura a editar não informado.");
+    }
+
+    // 🔐 Confirma que a fatura pertence mesmo a esta empresa antes de tocar nela
+    $ownerCheck = $pdo->prepare("SELECT id FROM invoices WHERE id = ? AND company_id = ?");
+    $ownerCheck->execute([$editInvoiceId, $companyIdSession]);
+    if (!$ownerCheck->fetch()) {
+        throw new Exception("Fatura não encontrada para esta empresa.");
     }
 
     subscription_assert_active($pdo, $companyIdSession);
@@ -41,7 +51,10 @@ try {
     // =========================
     // 📌 CONTACTO
     // =========================
-    if (!empty($fatura['contact_id'])) {
+    if (($fatura['anonymous_client'] ?? '0') === '1' && empty($fatura['contact_id'])) {
+        // Cliente X (anónimo / consumidor final)
+        $contactId = get_anonymous_contact_id($pdo, $companyIdSession);
+    } elseif (!empty($fatura['contact_id'])) {
         $contactId = (int)$fatura['contact_id'];
     } else {
 
@@ -78,7 +91,7 @@ try {
     }
 
     // Remove campos extras
-    foreach (['contact_id', 'name', 'email', 'telephone', 'address', 'contributor', 'po_box', 'country', 'city'] as $f) {
+    foreach (['contact_id', 'anonymous_client', 'name', 'email', 'telephone', 'address', 'contributor', 'po_box', 'country', 'city'] as $f) {
         unset($fatura[$f]);
     }
 
@@ -88,7 +101,7 @@ try {
     $invoiceDbFields = [
         'contact_id' => $contactId,
         'company_id' => $companyIdSession,
-        'user_id' => (int)$fatura['user_id'],
+        'user_id' => $userIdSession,
         'issue_date' => $fatura['issue_date'],
         'due_date' => (int)$fatura['due_date'],
         'reference' => $fatura['reference'] ?? null,
@@ -120,14 +133,18 @@ try {
     }
 
     $values[] = $editInvoiceId;
+    $values[] = $companyIdSession;
 
-    $stmt = $pdo->prepare("UPDATE invoices SET " . implode(",", $set) . " WHERE id = ?");
+    $stmt = $pdo->prepare("UPDATE invoices SET " . implode(",", $set) . " WHERE id = ? AND company_id = ?");
     $stmt->execute($values);
 
     $invoiceId = $editInvoiceId;
 
-    $pdo->prepare("DELETE FROM invoice_items WHERE invoice_id = ?")
-        ->execute([$invoiceId]);
+    $pdo->prepare("
+        DELETE ii FROM invoice_items ii
+        INNER JOIN invoices i ON i.id = ii.invoice_id
+        WHERE ii.invoice_id = ? AND i.company_id = ?
+    ")->execute([$invoiceId, $companyIdSession]);
 
     // =========================
     // 📦 ITENS

@@ -8,11 +8,12 @@ session_start();
 header('Content-Type: application/json');
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $user_email = trim($_POST['user_email']);
-    $encrypted_password = trim($_POST['password']);
+    // Identificador: username, e-mail ou telefone
+    $identifier = trim($_POST['user_email'] ?? '');
+    $encrypted_password = trim($_POST['password'] ?? '');
     $remember_me = isset($_POST['remember_me']) ? 1 : 0;
 
-    if (empty($user_email) || empty($encrypted_password)) {
+    if (empty($identifier) || empty($encrypted_password)) {
         echo json_encode(['success' => false, 'message' => 'Preencha todos os campos.']);
         exit;
     }
@@ -22,6 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $privateKeyResource = openssl_pkey_get_private($privateKey);
 
     // Descriptografa a senha
+    $password = null;
     openssl_private_decrypt(base64_decode($encrypted_password), $password, $privateKeyResource);
 
     if (empty($password)) {
@@ -29,20 +31,34 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         exit;
     }
 
-    // Resto do código para autenticação
+    // Normaliza telefone: só dígitos, últimos 9 (ex.: +244 923 456 789 -> 923456789)
+    $phone = null;
+    if (!filter_var($identifier, FILTER_VALIDATE_EMAIL)) {
+        $digits = preg_replace('/\D+/', '', $identifier);
+        if (strlen($digits) >= 9) {
+            $phone = substr($digits, -9);
+        }
+    }
+
+    // Autenticação por username, e-mail ou telefone
     $query = "SELECT u.*,
                 chu.company_id, chu.role, c.name name_company, c.registration_number, c.email email_company,
                 cc.iso_code, cc.currency, cc.symbol, cc.position
-              FROM users u 
+              FROM users u
                 JOIN company_has_user chu ON chu.user_id = u.id
                 JOIN companies c ON c.id = chu.company_id
-                LEFT JOIN currencies cc ON cc.iso_code = u.currency 
-              WHERE u.username = :user_email OR u.email = :user_email
+                LEFT JOIN currencies cc ON cc.iso_code = u.currency
+              WHERE u.username = :username
+                 OR u.email = :email
+                 OR RIGHT(REGEXP_REPLACE(u.phone, '[^0-9]', ''), 9) = :phone
               LIMIT 1";
 
     $stmt = $pdo->prepare($query);
-    $stmt->bindParam(':user_email', $user_email);
-    $stmt->execute();
+    $stmt->execute([
+        ':username' => $identifier,
+        ':email'    => $identifier,
+        ':phone'    => $phone, // null nunca faz match
+    ]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if ($user && password_verify($password, $user['password'])) {
@@ -56,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         $token = bin2hex(random_bytes(16));
 
-        $stmt = $pdo->prepare("INSERT INTO sessions (user_id, session_token, expires_at,created_at) VALUES (:user_id, :token, :expires_at, :created_at)");
+        $stmt = $pdo->prepare("INSERT INTO sessions (user_id, session_token, expires_at, created_at) VALUES (:user_id, :token, :expires_at, :created_at)");
         $stmt->execute([
             ':user_id' => $user['id'],
             ':token' => $token,

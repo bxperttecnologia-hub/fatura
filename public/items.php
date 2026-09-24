@@ -1,7 +1,6 @@
 <?php
 require_once '../app/views/layout_creation.php';
 ?>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <style>
     #itemsTable {
@@ -231,7 +230,7 @@ require_once '../app/views/layout_creation.php';
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
-    <script src="items/items.js?v=0.5"></script>
+    <script src="items/items.js?v=0.6"></script>
 
     <?php require_once '../app/views/footer.php'; ?>
 </body>

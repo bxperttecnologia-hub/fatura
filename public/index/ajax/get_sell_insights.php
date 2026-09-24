@@ -22,6 +22,13 @@ try {
         ? (int)$_GET['year']
         : (int)date('Y');
 
+    // Filtro mensal opcional (planos BXPERT_BAZA / BXPERT_BASE).
+    // Sem ?month= o comportamento é exactamente o anterior.
+    $month = (isset($_GET['month']) && is_numeric($_GET['month'])
+        && (int)$_GET['month'] >= 1 && (int)$_GET['month'] <= 12)
+        ? (int)$_GET['month']
+        : null;
+
     if ($company_id <= 0 || $user_id <= 0) {
 
         echo json_encode([
@@ -71,6 +78,20 @@ try {
         // novembro do ano selecionado
         $previousMonthStart = "{$year}-11-01";
         $previousMonthEnd   = "{$year}-11-30";
+    }
+
+
+    // Mês escolhido: sobrepõe o mês em análise (e o mês anterior, para os crescimentos)
+    if ($month !== null) {
+
+        $monthStart = sprintf('%04d-%02d-01', $year, $month);
+        $monthEnd   = date('Y-m-t', strtotime($monthStart));
+
+        $previousMonthStart = date('Y-m-01', strtotime($monthStart . ' -1 month'));
+        $previousMonthEnd   = date('Y-m-t', strtotime($previousMonthStart));
+
+        // sparklines/janelas terminam no fim do mês escolhido (ou hoje, se for o mês actual)
+        $today = min($monthEnd, date('Y-m-d'));
     }
 
     // =====================================================
@@ -193,6 +214,44 @@ try {
     // escolhido pelo utilizador. Agora usa $monthStart/$monthEnd,
     // que já respeitam o ano selecionado.
     $volumeLiquidMensal = getRecebimentosMesAtual($pdo, $company_id, $monthStart, $monthEnd);
+
+    // =====================================================
+    // A RECEBER ESTE MÊS
+    // Saldo em aberto (final_total - paid_total) das faturas
+    // emitidas no mês em análise. Não depende do status,
+    // porque este usa diretamente o valor já pago em cada
+    // fatura (paid_total), evitando presumir o significado
+    // de cada código de status.
+    // =====================================================
+
+    function getAReceberMesAtual($pdo, $company_id, $monthStart, $monthEnd)
+    {
+        $sql = "
+        SELECT
+            COALESCE(SUM(final_total - paid_total), 0) AS total,
+            COUNT(*) AS documentos
+        FROM invoices
+        WHERE company_id = :company_id
+          AND DATE(issue_date) BETWEEN :start AND :end
+          AND (final_total - paid_total) > 0
+    ";
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([
+            'company_id' => $company_id,
+            'start' => $monthStart,
+            'end' => $monthEnd
+        ]);
+
+        $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+        return [
+            'total' => (float)($row['total'] ?? 0),
+            'documentos' => (int)($row['documentos'] ?? 0)
+        ];
+    }
+
+    $aReceberMes = getAReceberMesAtual($pdo, $company_id, $monthStart, $monthEnd);
 
 
     // recebimentos mensais crescimento
@@ -441,6 +500,16 @@ try {
     // TOP CLIENTES
     // =====================================================
 
+    // Com filtro mensal, os principais clientes são os do mês escolhido
+    $topClientesPeriodSql = ($month !== null)
+        ? "AND DATE(i.issue_date) BETWEEN :start AND :end"
+        : "";
+    $topClientesParams = ['company_id' => $company_id];
+    if ($month !== null) {
+        $topClientesParams['start'] = $monthStart;
+        $topClientesParams['end']   = $monthEnd;
+    }
+
     $topClientesSql = "
         SELECT
             c.id,
@@ -452,6 +521,7 @@ try {
             ON c.id = i.contact_id
         WHERE i.company_id = :company_id
         AND i.status NOT IN (1,2)
+        {$topClientesPeriodSql}
         GROUP BY c.id, c.name
         ORDER BY total_faturado DESC
         LIMIT 10
@@ -459,9 +529,7 @@ try {
 
     $stmtTop = $pdo->prepare($topClientesSql);
 
-    $stmtTop->execute([
-        'company_id' => $company_id
-    ]);
+    $stmtTop->execute($topClientesParams);
 
     $topClientes = $stmtTop->fetchAll(PDO::FETCH_ASSOC);
 
@@ -848,6 +916,9 @@ try {
                 'volume_liquid' => round($volumeLiquid, 2),
                 'volume_liquid_mensal' => round($volumeLiquidMensal, 2),
                 'volume_liquid_mensal_crescimento' => $volumeLiquidMensalCrescimento,
+
+                'a_receber_mensal' => round($aReceberMes['total'], 2),
+                'a_receber_documentos' => $aReceberMes['documentos'],
 
                 'media_mensal' => round($mediaMensal, 2),
 

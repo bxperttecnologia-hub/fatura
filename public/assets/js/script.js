@@ -22,24 +22,18 @@ $(document).ready(function () {
     const itemType = $("#category").val();
     const name = $("input[name='name']").val();
     const code = $("#codigo").val();
-    const stockId = $("#stock_id").val();
 
     if (!name) {
       showError("Nome é obrigatório");
       return false;
     }
 
-    // regras só para produto
-    if (itemType === "product") {
-      if (!code) {
-        showError("Código é obrigatório para produtos");
-        return false;
-      }
-
-      if (!stockId) {
-        showError("Selecione um stock para produtos");
-        return false;
-      }
+    // Código continua obrigatório para produtos.
+    // Stock/depósito é OPCIONAL: o item pode ser criado sem stock
+    // e associado a um depósito mais tarde.
+    if (itemType === "product" && !code) {
+      showError("Código é obrigatório para produtos");
+      return false;
     }
 
     return true;
@@ -405,5 +399,3 @@ function formatCurrency(value, currencySymbol, currencyPosition) {
 //   overlay.classList.remove("show");
 //   document.body.classList.remove("sidebar-open");
 // });
-
-

@@ -5,7 +5,7 @@ session_start();
 date_default_timezone_set($_SESSION["timezone"]);
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     // Lista de campos obrigatórios
-    $requiredFields = ["company_id", "name", "email", "type", "city", "telephone", "contributor", "address"];
+    $requiredFields = ["company_id", "name", "contributor", "address"];
 
     // Verifica se algum campo obrigatório está vazio
     foreach ($requiredFields as $field) {

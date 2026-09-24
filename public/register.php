@@ -6,10 +6,10 @@ require_once '../app/views/head.php';
 ?>
 
 <style>
-    /* ===== Estilo de input "pill" com label sobre a borda (inspirado no design de referência) ===== */
+    /* ===== Estilo de input "pill" com label sobre a borda ===== */
     .field-group {
         position: relative;
-        margin-bottom: 1.9rem;
+        margin-bottom: 1.5rem;
     }
 
     .field-group>label {
@@ -47,14 +47,15 @@ require_once '../app/views/head.php';
 
     .field-wrapper input,
     .field-wrapper select {
-        border: 0px solid none;
-        outline: 0px solid none;
+        border: none;
+        outline: none;
         background: transparent;
         flex: 1 1 auto;
         font-size: 0.95rem;
         color: #212529;
         min-width: 0;
         padding: 0;
+        box-shadow: none !important;
     }
 
     .field-wrapper select {
@@ -102,7 +103,6 @@ require_once '../app/views/head.php';
         display: flex;
     }
 
-    /* Prefixo fixo (usado no campo Website) */
     .field-prefix {
         color: #9aa0a6;
         font-size: 0.95rem;
@@ -110,7 +110,6 @@ require_once '../app/views/head.php';
         user-select: none;
     }
 
-    /* Regras de senha (mantido, apenas realinhado ao novo wrapper) */
     #passwordRules {
         width: 100%;
         margin-top: 0.5rem;
@@ -120,164 +119,194 @@ require_once '../app/views/head.php';
     }
 </style>
 
-<div class="row w-100 mx-0 gx-0"> <!-- Removendo margens laterais -->
-
-    <!-- Coluna da Imagem agora à esquerda -->
-    <div class="col-12 col-md-6 d-flex justify-content-center align-items-center vh-100" id="bgRegister">
-        <div class="" style="position:absolute;z-index:100;left:2rem;top:3rem">
-            <?= gerarDropdownPaises($paises, $paisSelecionado); ?>
+<div class="row w-100 mx-0 gx-0">
+    <!-- Coluna da Imagem à esquerda -->
+    <div class="col-12 col-md-6 d-flex justify-content-center align-items-center vh-100 position-relative" id="bgRegister">
+        <div style="position:absolute; z-index:100; left:2rem; top:3rem">
+            <?= gerarDropdownPaises($paises ?? [], $paisSelecionado ?? ''); ?>
         </div>
         <img class="img-fluid" src="assets/img/logo/BXpert-Branca.png" style="max-width: 80%;">
     </div>
 
-    <!-- Coluna do Formulário agora à direita -->
-    <div class="col-12 col-sm-6">
-        <div class="d-flex flex-column justify-content-center align-items-center min-vh-100 p-2">
+    <!-- Coluna do Formulário à direita -->
+    <div class="col-12 col-md-6">
+        <div class="container min-vh-100 d-flex align-items-center justify-content-center">
+            <div style="max-width: 420px; width: 100%;">
+                <h2 class="fw-bold text-center mb-1">Registre-se</h2>
+                <p class="text-center text-muted mb-4">Crie a sua conta em menos de um minuto.</p>
 
-            <div class="d-flex flex-column mb-3 text-center">
-                <h2 class="fw-bold mb-0"><?= t('Registre-se') ?></h2>
-                <span class="text-grey"><?= t('Junte-se ao sistema mais inovador e eficiente do mercado!') ?></span>
+                <!-- Passo 1: Dados -->
+                <form id="stepInfo" novalidate>
+                    <div class="field-group" data-field="name">
+                        <label for="name">Nome completo</label>
+                        <div class="field-wrapper">
+                            <i class="bi bi-person"></i>
+                            <input type="text" id="name" name="name" required minlength="3" placeholder="Digite seu nome">
+                        </div>
+                        <div class="field-error-msg">Por favor, insira o seu nome completo.</div>
+                    </div>
+
+                    <div class="field-group" data-field="phone">
+                        <label for="phone">Telefone (com prefixo do país)</label>
+                        <div class="field-wrapper">
+                            <i class="bi bi-telephone"></i>
+                            <input type="tel" id="phone" name="phone" placeholder="+244 900 000 000" required>
+                        </div>
+                        <div class="field-error-msg">Número de telefone inválido.</div>
+                    </div>
+
+                    <div class="mb-4">
+                        <span class="form-label d-block text-muted small fw-bold mb-2">Receber código por</span>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="channel" id="chSms" value="sms" checked>
+                            <label class="form-check-label" for="chSms">SMS</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="channel" id="chWa" value="whatsapp">
+                            <label class="form-check-label" for="chWa">WhatsApp</label>
+                        </div>
+                    </div>
+
+                    <button type="submit" id="btnEnviar" class="btn btn-success w-100 rounded-pill py-2">Enviar código</button>
+                </form>
+
+                <!-- Passo 2: Código -->
+                <form id="stepCode" class="d-none" novalidate>
+                    <p id="codeHelp" class="text-muted text-center mb-3"></p>
+
+                    <div class="field-group" data-field="code">
+                        <label for="code">Código de verificação</label>
+                        <div class="field-wrapper">
+                            <input class="text-center fw-bold" type="text" id="code" name="code"
+                                inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" required>
+                        </div>
+                        <div class="field-error-msg">Código inválido.</div>
+                    </div>
+
+                    <button type="submit" id="btnVerificar" class="btn btn-success w-100 rounded-pill py-2">Confirmar</button>
+                    <button type="button" id="btnReenviar" class="btn btn-link w-100 mt-2 text-decoration-none" disabled>Reenviar código</button>
+                </form>
+
+                <div class="text-center mt-4">
+                    <p class="mb-0">Já tem conta? <a href="login.php" class="text-decoration-none fw-bold" style="color:var(--blue, #2f9bff)">Clique aqui para logar.</a></p>
+                </div>
             </div>
-
-
-            <form id="registerForm" class="w-75 mx-auto">
-                <h5 class="mt-3 mb-3"><?= t('Dados Pessoais') ?></h5>
-
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="field-group" data-field="username">
-                            <label for="username"><?= t('Usuário') ?></label>
-                            <div class="field-wrapper">
-                                <i class="bi bi-person"></i>
-                                <input style="border: none; background: none !important;" type="text" id="username" name="username" required>
-                            </div>
-                            <small id="usernameFeedback" class="field-error-msg"></small>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="field-group" data-field="name">
-                            <label for="name"><?= t('Nome Completo') ?></label>
-                            <div class="field-wrapper">
-                                <i class="bi bi-person-badge"></i>
-                                <input style="border: none; background: none !important;" type="text" id="name" name="name" required>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="field-group" data-field="email">
-                            <label for="email"><?= t('E-mail') ?></label>
-                            <div class="field-wrapper">
-                                <i class="bi bi-envelope"></i>
-                                <input style="border: none; background: none !important;" type="email" id="email" name="email" required>
-                            </div>
-                            <small id="emailFeedback" class="field-error-msg"></small>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="field-group" data-field="phone">
-                            <label for="phone"><?= t('Telefone') ?></label>
-                            <div class="field-wrapper">
-                                <i class="bi bi-telephone"></i>
-                                <input style="border: none; background: none !important;" type="text" id="phone" name="phone" required>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="field-group" data-field="password">
-                            <label for="password"><?= t('Senha') ?></label>
-                            <div class="field-wrapper">
-                                <i class="bi bi-lock"></i>
-                                <input style="border: none; background: none !important;" type="password" id="password" name="password" required>
-                            </div>
-                            <div id="passwordRules" class="position-absolute bg-white border p-2 d-none">
-                                <ul class="list-unstyled mb-0">
-                                    <li id="rule-length" class="text-danger"><?= t('A senha deve ter no mínimo 6 caracteres') ?></li>
-                                    <li id="rule-uppercase" class="text-danger"><?= t('A senha deve conter pelo menos uma letra maiúscula') ?></li>
-                                    <li id="rule-lowercase" class="text-danger"><?= t('A senha deve conter pelo menos uma letra minúscula') ?></li>
-                                    <li id="rule-special" class="text-danger"><?= t('A senha deve conter pelo menos um caractere especial (!@#$%^&*)') ?></li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="field-group" data-field="gender">
-                            <label for="gender"><?= t('Gênero') ?></label>
-                            <div class="field-wrapper">
-                                <i class="bi bi-people"></i>
-                                <select style="border: none; background: none !important;" id="gender" name="gender" required>
-                                    <option value="Masculino"><?= t('Masculino') ?></option>
-                                    <option value="Feminino"><?= t('Feminino') ?></option>
-                                    <option value="Outro"><?= t('Outro') ?></option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <h5 class="mt-3 mb-4"><?= t('Dados da Empresa') ?></h5>
-
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="field-group" data-field="company_name">
-                            <label for="company_name"><?= t('Nome da Empresa') ?></label>
-                            <div class="field-wrapper">
-                                <i class="bi bi-building"></i>
-                                <input style="border: none; background: none !important;" type="text" id="company_name" name="company_name" required>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="field-group" data-field="registration_number">
-                            <label for="registration_number"><?= t('CNPJ') ?></label>
-                            <div class="field-wrapper">
-                                <i class="bi bi-hash"></i>
-                                <input style="border: none; background: none !important;" type="text" id="registration_number" name="registration_number" required>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="field-group" data-field="company_phone">
-                            <label for="company_phone"><?= t('Telefone da Empresa') ?></label>
-                            <div class="field-wrapper">
-                                <i class="bi bi-telephone-forward"></i>
-                                <input style="border: none; background: none !important;" type="text" id="company_phone" name="company_phone" required>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="field-group" data-field="website">
-                            <label for="website"><?= t('Website') ?></label>
-                            <div class="field-wrapper">
-                                <i class="bi bi-globe"></i>
-                                <span class="field-prefix">https://</span>
-                                <input style="border: none; background: none !important;" type="text" id="website" name="website" placeholder="meusite.com">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <button type="submit" class="btn btn-success w-100"><?= t('Cadastrar') ?></button>
-            </form>
-
-            <div class="text-center mt-3">
-                <p><?= t('Já tem conta?') ?> <a href="login.php" class="text-decoration-none" style="color:var(--blue)"><?= t('Clique aqui para logar.') ?></a></p>
-            </div>
-
         </div>
     </div>
 </div>
 
+<!-- <script src="register/register.js?v=1.6"></script> -->
+
 <script>
-    // Marca cada .field-group como "preenchido" (estado FILLED) e limpa erro ao digitar
+    $(function() {
+        var $info = $('#stepInfo'),
+            $code = $('#stepCode'),
+            timer;
+
+        function erro(msg) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erro',
+                    text: msg
+                });
+            } else {
+                alert(msg);
+            }
+        }
+
+        function msgDe(xhr) {
+            if (xhr.status === 429) {
+                return 'Muitas tentativas em pouco tempo. Por favor, aguarde alguns minutos antes de tentar novamente.';
+            }
+            if (xhr.responseJSON && xhr.responseJSON.message) {
+                return xhr.responseJSON.message;
+            }
+            if (xhr.responseJSON && xhr.responseJSON.error) {
+                return xhr.responseJSON.error;
+            }
+            return 'Ocorreu um erro ao processar a solicitação. Tente novamente.';
+        }
+
+        function cooldown(seg) {
+            var $b = $('#btnReenviar').prop('disabled', true).text('Reenviar em ' + seg + 's');
+            clearInterval(timer);
+            timer = setInterval(function() {
+                seg--;
+                if (seg <= 0) {
+                    clearInterval(timer);
+                    $b.prop('disabled', false).text('Reenviar código');
+                } else {
+                    $b.text('Reenviar em ' + seg + 's');
+                }
+            }, 1000);
+        }
+
+        function enviar() {
+            return $.ajax({
+                    url: 'register/ajax/send_otp.php',
+                    type: 'POST',
+                    data: $info.serialize(),
+                    dataType: 'json',
+                    timeout: 20000
+                })
+                .done(function(r) {
+                    if (r && r.phone_masked) {
+                        $info.addClass('d-none');
+                        $code.removeClass('d-none');
+                        $('#codeHelp').text('Enviámos um código para ' + r.phone_masked + '.');
+                        $('#code').val('').focus();
+                        cooldown(60);
+                    } else {
+                        erro('Resposta inválida do servidor.');
+                    }
+                })
+                .fail(function(xhr) {
+                    // DEBUG TEMPORÁRIO: mostra a resposta em bruto do servidor
+                    // para vermos exatamente o que o send_otp.php devolveu.
+                    alert('DEBUG (status ' + xhr.status + '):\n' + xhr.responseText);
+                    erro(msgDe(xhr));
+                });
+        }
+
+        $info.on('submit', function(e) {
+            e.preventDefault();
+            if (!this.checkValidity()) return this.reportValidity();
+            var $b = $('#btnEnviar').prop('disabled', true);
+            enviar().always(function() {
+                $b.prop('disabled', false);
+            });
+        });
+
+        $('#btnReenviar').on('click', enviar);
+
+        $code.on('submit', function(e) {
+            e.preventDefault();
+            var $b = $('#btnVerificar').prop('disabled', true);
+            $.ajax({
+                    url: 'register/ajax/verify_otp.php',
+                    type: 'POST',
+                    data: $code.serialize(),
+                    dataType: 'json',
+                    timeout: 20000
+                })
+                .done(function(r) {
+                    if (r && r.redirect) {
+                        window.location.href = r.redirect;
+                    } else {
+                        window.location.href = 'index.php';
+                    }
+                })
+                .fail(function(xhr) {
+                    erro(msgDe(xhr));
+                })
+                .always(function() {
+                    $b.prop('disabled', false);
+                });
+        });
+    });
+
+    // Controladores de estado dos campos (is-filled / has-error)
     document.querySelectorAll('.field-group').forEach(function(group) {
         var control = group.querySelector('input, select');
         if (!control) return;
@@ -298,30 +327,29 @@ require_once '../app/views/head.php';
         control.addEventListener('change', syncFilled);
     });
 
-    // Helper para marcar/desmarcar erro num campo específico (usar no register.js)
-    // ex: setFieldError('email', 'E-mail inválido');
     window.setFieldError = function(fieldName, message) {
         var group = document.querySelector('.field-group[data-field="' + fieldName + '"]');
         if (!group) return;
         var msgEl = group.querySelector('.field-error-msg');
         group.classList.add('has-error');
-        if (msgEl) msgEl.textContent = message || '';
+        if (msgEl && message) msgEl.textContent = message;
     };
+
     window.clearFieldError = function(fieldName) {
         var group = document.querySelector('.field-group[data-field="' + fieldName + '"]');
         if (!group) return;
         group.classList.remove('has-error');
     };
 
-    // Website: só o utilizador escreve a parte depois de https://
-    document.getElementById('registerForm').addEventListener('submit', function() {
-        var websiteInput = document.getElementById('website');
-        if (websiteInput.value && websiteInput.value.trim() !== '') {
-            var value = websiteInput.value.trim().replace(/^https?:\/\//i, '');
-            websiteInput.value = 'https://' + value;
-        }
-    });
+    // Tratamento seguro para campos externos (como Website) caso existam
+    var regForm = document.getElementById('registerForm');
+    if (regForm) {
+        regForm.addEventListener('submit', function() {
+            var websiteInput = document.getElementById('website');
+            if (websiteInput && websiteInput.value && websiteInput.value.trim() !== '') {
+                var value = websiteInput.value.trim().replace(/^https?:\/\//i, '');
+                websiteInput.value = 'https://' + value;
+            }
+        });
+    }
 </script>
-
-<script src="register/register.js?v=1.6"></script>
-<?php require_once '../app/views/footer.php'; ?>

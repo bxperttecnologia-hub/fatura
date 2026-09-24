@@ -150,7 +150,7 @@ try {
 
         FROM items i
 
-        INNER JOIN currencies cr
+        LEFT JOIN currencies cr
             ON cr.iso_code = i.currency
 
         LEFT JOIN stock_items si
