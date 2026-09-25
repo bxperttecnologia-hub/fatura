@@ -124,6 +124,7 @@ require_once '../app/views/layout_creation.php';
                                 <thead>
                                     <tr>
                                         <th>Nome do Cargo</th>
+                                        <th>Departamento</th>
                                         <th>Salário Sugerido</th>
                                         <th>Subs. Alimentação</th>
                                         <th>Subs. Transporte</th>
@@ -159,6 +160,13 @@ require_once '../app/views/layout_creation.php';
                     <div class="mb-3">
                         <label>Salário Sugerido</label>
                         <input type="number" step="0.01" name="suggested_salary" class="form-control">
+                    </div>
+
+                    <div class="mb-3">
+                        <label>Departamento (opcional)</label>
+                        <select name="department_id" id="positionDepartmentSelect" class="form-select">
+                            <option value="">Selecione</option>
+                        </select>
                     </div>
 
                     <div class="mb-3">
@@ -207,6 +215,10 @@ require_once '../app/views/layout_creation.php';
                     data: 'name'
                 },
                 {
+                    data: 'department_name',
+                    render: data => data || '<span class="text-muted">—</span>'
+                },
+                {
                     data: 'suggested_salary',
                     render: function(data) {
                         return `Kz ${parseFloat(data).toLocaleString('pt-AO', { minimumFractionDigits: 2 })}`;
@@ -243,6 +255,7 @@ require_once '../app/views/layout_creation.php';
                           <button class='btn btn-sm text-warning editPosition'
                             data-id='${row.id}'
                             data-name='${row.name}'
+                            data-department_id='${row.department_id || ''}'
                             data-salary='${row.suggested_salary}'
                             data-food_allowance='${row.food_allowance || 0}'
                             data-transport_allowance='${row.transport_allowance || 0}'
@@ -258,6 +271,17 @@ require_once '../app/views/layout_creation.php';
                 }
             ]
         });
+
+        function loadDepartmentOptions() {
+            $.getJSON('rh/ajax/list_departments.php', function(resp) {
+                const data = (resp && resp.data) || [];
+                const currentValue = $('#positionDepartmentSelect').val();
+                const options = data.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+                $('#positionDepartmentSelect').html(`<option value="">Selecione</option>${options}`);
+                if (currentValue) $('#positionDepartmentSelect').val(currentValue);
+            });
+        }
+        loadDepartmentOptions();
 
         $('#formPosition').on('submit', function(e) {
             e.preventDefault();
@@ -277,9 +301,15 @@ require_once '../app/views/layout_creation.php';
             $('#formPosition input[name=transport_allowance]').val(btn.data('transport_allowance'));
             $('#formPosition select[name=vacation_subsidy_pct]').val(btn.data('vacation_subsidy_pct'));
             $('#formPosition select[name=thirteenth_subsidy_pct]').val(btn.data('thirteenth_subsidy_pct'));
+            $('#positionDepartmentSelect').val(btn.data('department_id') || '');
 
             $('#formPosition').append(`<input type="hidden" name="id" value="${btn.data('id')}" id="editPositionId">`);
             $('#modalPosition').modal('show');
+        });
+
+        $('#modalPosition').on('hidden.bs.modal', function() {
+            $('#formPosition')[0].reset();
+            $('#editPositionId').remove();
         });
 
         $('#positionsTable').on('click', '.deletePosition', function() {

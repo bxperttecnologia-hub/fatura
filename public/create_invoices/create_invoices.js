@@ -62,6 +62,14 @@ $(document).ready(function () {
     if (contatoId === ANON_VALUE) {
       $("#anonymous_client").val("1");
       $("#contact_id").val("");
+
+      // Limpa e desativa a ficha para nunca reenviar dados de um cliente
+      // escolhido/preenchido anteriormente (evita "herdar" NIF/nome/email
+      // de outro cliente numa fatura que devia ficar sem NIF).
+      $("#contact-form input, #contact-form select, #contact-form textarea")
+        .val("")
+        .prop("disabled", true);
+
       $("#contact-form").hide();
       renderClientTrigger();
       return;
@@ -127,6 +135,7 @@ $(document).ready(function () {
         "#contact-form input:not(#contact_id), #contact-form textarea, #contact-form select",
       ).val("");
       $("#contact_id").val("");
+      $("#anonymous_client").val("0");
       $("#spanIconCreateInvoices").text("close");
       $("#toggle-contact-form")
         .attr("data-bs-title", "Fechar formulário")

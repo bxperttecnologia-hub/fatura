@@ -37,8 +37,15 @@ try {
     // =========================
     // 📌 CONTACTO
     // =========================
-    if (($fatura['anonymous_client'] ?? '0') === '1' && empty($fatura['contact_id'])) {
-        // Cliente X (anónimo / consumidor final)
+    $isAnonymousRequest = ($fatura['anonymous_client'] ?? '0') === '1';
+    $hasNewContactData = trim((string)($fatura['email'] ?? '')) !== ''
+        || trim((string)($fatura['name'] ?? '')) !== ''
+        || trim((string)($fatura['contributor'] ?? '')) !== '';
+
+    if (empty($fatura['contact_id']) && ($isAnonymousRequest || !$hasNewContactData)) {
+        // Cliente X (anónimo / consumidor final) — inclui o caso em que a
+        // flag não chegou mas também não há dados suficientes para criar
+        // um contacto novo: nunca inserir um contacto vazio/"fantasma".
         $contactId = get_anonymous_contact_id($pdo, $companyIdSession);
     } elseif (!empty($fatura['contact_id'])) {
         $contactId = (int)$fatura['contact_id'];
@@ -61,9 +68,9 @@ try {
                 $fatura['name'],
                 $fatura['email'],
                 $fatura['contributor'] ?? null,
-                $fatura['address'] ?? null,
+                $fatura['address'] ?? "Angola",
                 $fatura['po_box'] ?? null,
-                $fatura['country'] ?? null,
+                $fatura['country'] ?? "Angola",
                 $fatura['city'] ?? null,
                 $companyIdSession
             ]);

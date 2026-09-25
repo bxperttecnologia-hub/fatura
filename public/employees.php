@@ -25,6 +25,8 @@ try {
 require_once '../app/views/layout_creation.php';
 ?>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
 <style>
     /* ===== TABELA ESTILO ===== */
     #employeesTable {
@@ -342,6 +344,7 @@ require_once '../app/views/layout_creation.php';
                                         <th>Nome</th>
                                         <th>BI</th>
                                         <th>Cargo</th>
+                                        <th>Departamento</th>
                                         <th>Salário</th>
                                         <th>Status</th>
                                         <th>Ações</th>
@@ -439,6 +442,20 @@ require_once '../app/views/layout_creation.php';
                                 </div>
 
                                 <div class="col-md-6 mt-3">
+                                    <label>Departamento</label>
+                                    <select name="department_id" id="departmentSelect" class="form-select">
+                                        <option value="">Selecione</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-6 mt-3">
+                                    <label>Chefia direta</label>
+                                    <select name="manager_id" id="managerSelect" class="form-select">
+                                        <option value="">Selecione</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-6 mt-3">
                                     <label>Status</label>
                                     <select name="status" class="form-select">
                                         <option>Ativo</option>
@@ -448,7 +465,7 @@ require_once '../app/views/layout_creation.php';
 
                                 <div class="col-md-6 mt-3">
                                     <label>Tipo de vínculo</label>
-                                    <select type="text" name="contract_type" class="form-select contract-type-select">
+                                    <select type="text" name="contract_type" class="form-select">
                                         <option selected>Selecione o tipo</option>
                                         <option value="efetivo">Efetivo</option>
                                         <option value="atermo">A Termo</option>
@@ -458,11 +475,6 @@ require_once '../app/views/layout_creation.php';
                                 <div class="col-md-6 mt-3">
                                     <label>Data de Admissão</label>
                                     <input type="date" name="admission_date" class="form-control">
-                                </div>
-
-                                <div class="col-md-6 mt-3 end-date-field" style="display:none;">
-                                    <label>Data de Término</label>
-                                    <input type="date" name="end_date" class="form-control">
                                 </div>
                             </div>
                         </div>
@@ -614,6 +626,20 @@ require_once '../app/views/layout_creation.php';
                                                 <option>Inativo</option>
                                             </select>
                                         </div>
+
+                                        <div class="col-12 col-md-6 mb-3">
+                                            <label>Departamento</label>
+                                            <select name="department_id" id="editDepartmentSelect" class="form-select">
+                                                <option value="">Selecione</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="col-12 col-md-6 mb-3">
+                                            <label>Chefia direta</label>
+                                            <select name="manager_id" id="editManagerSelect" class="form-select">
+                                                <option value="">Selecione</option>
+                                            </select>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -639,7 +665,7 @@ require_once '../app/views/layout_creation.php';
 
                                         <div class="col-12 col-md-6 mb-3">
                                             <label>Tipo de vínculo</label>
-                                            <select type="text" name="contract_type" class="form-select contract-type-select">
+                                            <select type="text" name="contract_type" class="form-select">
                                                 <option selected>Selecione o tipo</option>
                                                 <option value="efetivo">Efetivo</option>
                                                 <option value="atermo">A Termo</option>
@@ -649,11 +675,6 @@ require_once '../app/views/layout_creation.php';
                                         <div class="col-12 col-md-6 mb-3">
                                             <label>Data de Admissão</label>
                                             <input type="date" name="admission_date" class="form-control">
-                                        </div>
-
-                                        <div class="col-12 col-md-6 mb-3 end-date-field" style="display:none;">
-                                            <label>Data de Término</label>
-                                            <input type="date" name="end_date" class="form-control">
                                         </div>
                                     </div>
                                 </div>
@@ -774,6 +795,78 @@ require_once '../app/views/layout_creation.php';
     let isEditing = false;
     let employeesTable = null;
 
+    // Departamento / Chefia direta (Fase 1) — estado usado para reaplicar
+    // o valor selecionado depois de recarregar os <select> via ajax.
+    let pendingDepartmentId = '';
+    let pendingManagerId = '';
+    let currentEditingEmployeeId = null;
+
+    function applyPendingOrgFields() {
+        if (pendingDepartmentId !== '') {
+            $('#editDepartmentSelect').val(pendingDepartmentId);
+        }
+        if (pendingManagerId !== '') {
+            $('#editManagerSelect').val(pendingManagerId);
+        }
+    }
+
+    // Declaradas no escopo do <script> (não dentro de um único
+    // $(document).ready) porque são chamadas tanto do bloco que trata
+    // a tabela/edição de funcionários como do bloco que carrega os
+    // selects de cargo/departamento/chefia.
+    const departmentSelects = () => $('#departmentSelect, #editDepartmentSelect');
+    const managerSelects = () => $('#managerSelect, #editManagerSelect');
+
+    function loadDepartments() {
+        $.ajax({
+            url: "rh/ajax/list_departments.php",
+            method: "GET",
+            dataType: "json",
+            success: function(response) {
+                const data = response?.data || [];
+                const optionsHtml = data.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+
+                departmentSelects().each(function() {
+                    const currentValue = $(this).val();
+                    $(this).html(`<option value="">Selecione</option>${optionsHtml}`);
+                    if (currentValue) $(this).val(currentValue);
+                });
+
+                applyPendingOrgFields();
+            },
+            error: function(xhr, status, error) {
+                console.log(error);
+            }
+        });
+    }
+
+    function loadManagers() {
+        $.ajax({
+            url: "rh/ajax/list_employees.php",
+            method: "GET",
+            dataType: "json",
+            success: function(response) {
+                const data = response?.data || [];
+                // Um funcionário não pode ser chefia de si próprio.
+                const optionsHtml = data
+                    .filter(e => String(e.id) !== String(currentEditingEmployeeId || ''))
+                    .map(e => `<option value="${e.id}">${e.name}</option>`)
+                    .join('');
+
+                managerSelects().each(function() {
+                    const currentValue = $(this).val();
+                    $(this).html(`<option value="">Selecione</option>${optionsHtml}`);
+                    if (currentValue) $(this).val(currentValue);
+                });
+
+                applyPendingOrgFields();
+            },
+            error: function(xhr, status, error) {
+                console.log(error);
+            }
+        });
+    }
+
     const steps = document.querySelectorAll(".step");
     const contents = document.querySelectorAll(".step-content");
 
@@ -849,6 +942,10 @@ require_once '../app/views/layout_creation.php';
                     data: 'position'
                 },
                 {
+                    data: 'department_name',
+                    render: data => data || '<span class="text-muted">—</span>'
+                },
+                {
                     data: 'salary',
                     render: data => `Kz ${parseFloat(data).toLocaleString('pt-AO', { minimumFractionDigits: 2 })}`
                 },
@@ -867,13 +964,14 @@ require_once '../app/views/layout_creation.php';
                         data-name='${row.name}'
                         data-bi='${row.bi}'
                         data-position='${row.position}'
+                        data-department_id='${row.department_id || ''}'
+                        data-manager_id='${row.manager_id || ''}'
                         data-salary='${row.salary}'
                         data-status='${row.status}'
                         data-document_type='${row.document_type}'
                         data-birth_date='${row.birth_date}'
                         data-contract_type='${row.contract_type}'
                         data-admission_date='${row.admission_date}'
-                        data-end_date='${row.end_date || ''}'
                         data-iban='${row.iban}'
                         data-marital_status='${row.marital_status || ''}'
                         data-academic_level='${row.academic_level || ''}'
@@ -885,6 +983,15 @@ require_once '../app/views/layout_creation.php';
             ]
         });
 
+
+        // Modal de criação: garante que nenhuma exclusão de chefia
+        // (usada na edição) fica presa de uma sessão anterior.
+        $('#modalEmployee').on('show.bs.modal', function() {
+            currentEditingEmployeeId = null;
+            pendingDepartmentId = '';
+            pendingManagerId = '';
+            loadManagers();
+        });
 
         // Submit do formulário
         $('#formEmployee').on('submit', function(e) {
@@ -1034,12 +1141,21 @@ require_once '../app/views/layout_creation.php';
             form.find('[name=birth_date]').val(get('birth_date'));
             form.find('[name=contract_type]').val(get('contract_type'));
             form.find('[name=admission_date]').val(get('admission_date'));
-            form.find('[name=end_date]').val(get('end_date'));
-            toggleEndDateField(form.find('.contract-type-select'));
             form.find('[name=iban]').val(get('iban'));
             form.find('[name=position]').val(get('position'));
             form.find('[name=marital_status]').val(get('marital_status'));
             form.find('[name=academic_level]').val(get('academic_level'));
+
+            // Departamento / Chefia direta: os selects só têm as opções
+            // depois de loadDepartments()/loadManagers() responderem, por
+            // isso guardamos o valor pretendido e aplicamo-lo quando a
+            // lista carregar (ver loadManagers, que exclui o próprio
+            // funcionário da lista de chefias possíveis).
+            pendingDepartmentId = get('department_id') || '';
+            pendingManagerId = get('manager_id') || '';
+            currentEditingEmployeeId = get('id') || null;
+            loadManagers(); // reaplica a lista excluindo o próprio funcionário
+            applyPendingOrgFields();
 
             // =========================
             // PREVIEW (LAYOUT SaaS)
@@ -1180,25 +1296,6 @@ require_once '../app/views/layout_creation.php';
         });
     }
 
-    // =========================
-    // TOGGLE: Data de Término (só para vínculo "A Termo")
-    // =========================
-    function toggleEndDateField($select) {
-        const $wrapper = $select.closest('.row, .modal-body').find('.end-date-field');
-        const $input = $wrapper.find('[name=end_date]');
-
-        if ($select.val() === 'atermo') {
-            $wrapper.show();
-        } else {
-            $wrapper.hide();
-            $input.val('');
-        }
-    }
-
-    $(document).on('change', '.contract-type-select', function() {
-        toggleEndDateField($(this));
-    });
-
     $(document).ready(function() {
 
         const positionsSelects = $('#positionSelect, #selectPosition');
@@ -1236,6 +1333,11 @@ require_once '../app/views/layout_creation.php';
 
         loadPositions();
         setInterval(loadPositions, 10000);
+
+        loadDepartments();
+        loadManagers();
+        setInterval(loadDepartments, 10000);
+        setInterval(loadManagers, 10000);
 
     });
 

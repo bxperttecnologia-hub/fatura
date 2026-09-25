@@ -3,6 +3,7 @@
 require_once '../../../app/config/db.php';
 require_once '../../../app/helpers/subscription.php';
 require_once '../../../app/helpers/invoice_helper.php';
+require_once '../../../app/helpers/anonymous_contact.php';
 
 header('Content-Type: application/json');
 session_start();
@@ -137,7 +138,16 @@ try {
     CONTACTO
     ==================================================
     */
-    if (!empty($fatura['contact_id'])) {
+    $isAnonymousRequest = ($fatura['anonymous_client'] ?? '0') === '1';
+    $hasNewContactData = trim((string)($fatura['email'] ?? '')) !== ''
+        || trim((string)($fatura['name'] ?? '')) !== ''
+        || trim((string)($fatura['contributor'] ?? '')) !== '';
+
+    if (empty($fatura['contact_id']) && ($isAnonymousRequest || !$hasNewContactData)) {
+        // Cliente X (anónimo / consumidor final) — nunca inserir um
+        // contacto vazio/"fantasma" quando não há dados de um cliente novo.
+        $contactId = get_anonymous_contact_id($pdo, $companyId);
+    } elseif (!empty($fatura['contact_id'])) {
         $contactId = (int)$fatura['contact_id'];
     } else {
 

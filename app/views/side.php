@@ -424,11 +424,12 @@
             <a href="purchases.php" data-link><i data-lucide="shopping-cart"></i> Compras</a>
         </div>
 
-        <button class="nav-item" data-submenu="#rh" data-tooltip="Recursos Humanos">
+        <button class="nav-item submenu-rh" data-submenu="#rh" data-tooltip="Recursos Humanos">
             <span><i data-lucide="users"></i> <span>Recursos Humanos</span></span>
             <i class="text-white menu-link-icon" data-lucide="chevron-down"></i>
         </button>
-        <div class="submenu" id="rh">
+        <div class="submenu submenu-rh" id="rh">
+            <a href="departments.php" data-link><i data-lucide="building-2"></i> Departamentos</a>
             <a href="employees.php" data-link><i data-lucide="users"></i> Funcionários</a>
             <a href="ponto.php" data-link><i data-lucide="clock"></i> Registro de Pontos</a>
             <a href="vacations.php" data-link><i data-lucide="calendar"></i> Férias / Licenças</a>
@@ -470,23 +471,72 @@
 <script>
     lucide.createIcons();
 
+
     $(document).ready(function() {
+
+        let current_plan = "";
+
         // Assinatura / limites
         $.getJSON('assets/ajax/get_company_limits.php', {
             company_id: <?php echo (int)$_SESSION['user']['company_id']; ?>
+
         }, function(resp) {
+
             if (!resp.success) {
                 $('#subInfo').text('Não foi possível carregar os limites.');
+
+                // Caso não consiga carregar o plano,
+                // podemos ocultar o submenu por segurança.
+                $('.submenu-rh').addClass('d-none');
+
                 return;
             }
+
+            // Guardar o plano retornado pela API
+            current_plan = String(resp.plan_name || '').trim();
+
+            // Data de expiração
             const expIso = resp.plan_expires_at || '';
-            const exp = expIso ? new Date(expIso + 'T00:00:00').toLocaleDateString('pt-PT') : '-';
-            const days = (resp.days_left === null) ? '-' : resp.days_left;
-            $('#subInfo').text(`${resp.plan_name} • vence em ${exp} • ${days} dias restantes`);
+
+            const exp = expIso ?
+                new Date(expIso + 'T00:00:00').toLocaleDateString('pt-PT') :
+                '-';
+
+            // Dias restantes
+            const days = (resp.days_left === null || resp.days_left === undefined) ?
+                '-' :
+                resp.days_left;
+
+            // Mostrar informações da assinatura
+            $('#subInfo').text(
+                `
+    $ {
+        current_plan
+    }•
+    vence em $ {
+        exp
+    }•
+    $ {
+        days
+    }
+    dias restantes`
+            );
+
+            // Normalizar o nome do plano para comparação
+            const plan = current_plan.toLowerCase();
+
+            // Planos que NÃO podem acessar RH
+            if (
+                plan === 'bxpert base' ||
+                plan === 'bxpert baza'
+            ) {
+                $('.submenu-rh').addClass('d-none');
+            } else {
+                $('.submenu-rh').removeClass('d-none');
+            }
         });
+
     });
-
-
 
     // Accordion dos submenus (responsabilidade exclusiva da sidebar)
     document.querySelectorAll('.nav-item[data-submenu]').forEach(button => {

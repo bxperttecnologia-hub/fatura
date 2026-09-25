@@ -269,7 +269,7 @@ if ($paid_total >= $inv['final_total']) {  // quitada
           <p class="mb-0">Tel: <?= htmlspecialchars($inv['company_phone']) ?></p>
           <p class="mb-0">E-mail: <?= htmlspecialchars($inv['company_email']) ?></p>
           <p class="mb-0">Website: <?= htmlspecialchars($inv['website']) ?></p>
-          <p class="mb-0">Contribuinte: <?= htmlspecialchars($inv['registration_number']) ?></p>
+          <p class="mb-0">Contribuinte: <?= htmlspecialchars($inv['registration_number']) ?? "" ?></p>
         </div>
       </div>
 
@@ -313,7 +313,7 @@ if ($paid_total >= $inv['final_total']) {  // quitada
             <span class="small">Cliente:</span><span class="small opacity-75 fw-semibold text-uppercase" style="margin-left: -50px !important; color: black;"><?= htmlspecialchars($inv['client_name']) ?></span>
           </div>
           <div class="vals">
-            <span class="mb-0 small">Contribuinte:</span><span class="small" style="margin-left: -50px !important;"><?= htmlspecialchars($inv['client_contributor']) ?></span>
+            <span class="mb-0 small">Contribuinte:</span><span class="small" style="margin-left: -50px !important;"><?= htmlspecialchars($inv['client_contributor'] ?? '', ENT_QUOTES, 'UTF-8') ?></span>
           </div>
 
           <div class="vals">
@@ -566,36 +566,36 @@ if ($paid_total >= $inv['final_total']) {  // quitada
 </body>
 
 <script>
-(() => {
-  // =========================
-  // MÁSCARA CARTÃO DE CRÉDITO
-  // =========================
+  (() => {
+    // =========================
+    // MÁSCARA CARTÃO DE CRÉDITO
+    // =========================
 
-  // =========================
-  // FORMATAÇÃO IBAN ANGOLA
-  // AO06.0006.0000.1234.5678.9012.1
-  // =========================
+    // =========================
+    // FORMATAÇÃO IBAN ANGOLA
+    // AO06.0006.0000.1234.5678.9012.1
+    // =========================
 
-  const ibanElement = document.getElementById("ibanNumber");
+    const ibanElement = document.getElementById("ibanNumber");
 
-  if (!ibanElement) return;
+    if (!ibanElement) return;
 
-  let value = ibanElement.textContent.trim();
+    let value = ibanElement.textContent.trim();
 
 
-  // remove espaços e pontos
-  value = value.replace(/[.\s]/g, "");
+    // remove espaços e pontos
+    value = value.replace(/[.\s]/g, "");
 
-  // separa prefixo AO06
-  const prefix = value.substring(0, 4);
-  const rest = value.substring(4);
+    // separa prefixo AO06
+    const prefix = value.substring(0, 4);
+    const rest = value.substring(4);
 
-  // agrupa em blocos de 4
-  const formatted = rest.match(/.{1,4}/g)?.join(".") || "";
+    // agrupa em blocos de 4
+    const formatted = rest.match(/.{1,4}/g)?.join(".") || "";
 
-  // resultado final
-  ibanElement.textContent = `${prefix}.${formatted}`;
-})();
+    // resultado final
+    ibanElement.textContent = `${prefix}.${formatted}`;
+  })();
 </script>
 
 </html>

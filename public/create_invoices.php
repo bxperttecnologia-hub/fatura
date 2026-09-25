@@ -816,7 +816,7 @@ $retentionRate = 6.5; // % aplicada pela caixa "Aplicar Retenção na Fonte"
 
     .inv-page .select2-container--default .select2-results__option[aria-selected="true"],
     .inv-page .select2-container--default .select2-results__option--selected {
-        background: var(--inv-field);
+        background: var(--inv-primary);
     }
 
     /* ---------- Responsivo ---------- */
@@ -911,7 +911,7 @@ $retentionRate = 6.5; // % aplicada pela caixa "Aplicar Retenção na Fonte"
             <input type="hidden" id="company_id" name="company_id" value="<?= (int) $_SESSION['user']['company_id'] ?>">
             <input type="hidden" id="user_id" name="user_id" value="<?= (int) $_SESSION['user']['id'] ?>">
             <input type="hidden" id="edit_invoice_id" name="edit_invoice_id" value="0">
-            <input type="hidden" id="contact_id" name="contact_id">
+            <input type="hidden" id="anonymous_client" name="anonymous_client" value="0">
             <input type="hidden" id="retention" name="retention" value="0.00">
             <input type="hidden" id="due_date" name="due_date" value="0">
 
@@ -1372,4 +1372,3 @@ $retentionRate = 6.5; // % aplicada pela caixa "Aplicar Retenção na Fonte"
 </script>
 
 <script src="create_invoices/create_invoices.js?v=2.1"></script>
-

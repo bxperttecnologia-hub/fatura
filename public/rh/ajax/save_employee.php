@@ -38,13 +38,10 @@ $marital_status  = trim($_POST['marital_status'] ?? '');
 $academic_level  = trim($_POST['academic_level'] ?? '');
 $contract_type   = trim($_POST['contract_type'] ?? '');
 $admission_date  = $_POST['admission_date'] ?? null;
-$end_date        = $_POST['end_date'] ?? null;
 $iban            = trim($_POST['iban'] ?? '');
 
-// Data de término só faz sentido para vínculos "a termo"
-if ($contract_type !== 'atermo' || empty($end_date)) {
-    $end_date = null;
-}
+$department_id = !empty($_POST['department_id']) ? (int)$_POST['department_id'] : null;
+$manager_id    = !empty($_POST['manager_id']) ? (int)$_POST['manager_id'] : null;
 
 /*
 |--------------------------------------------------------------------------
@@ -60,6 +57,63 @@ if (empty($name)) {
 if (empty($position)) {
     http_response_code(400);
     exit('Cargo obrigatório.');
+}
+
+// Fase 1: o formulário continua a enviar o CARGO como texto (select
+// existente, sem alterações no frontend) — resolvemos o position_id
+// correspondente aqui, no mesmo padrão de comparação usado em
+// search_employees.php (TRIM nos dois lados, mesma company_id).
+// employees.position (texto) continua a ser gravado como cache de
+// leitura; se o texto não corresponder a nenhuma position existente
+// (ex.: cargo digitado à mão em algum fluxo antigo), position_id fica
+// NULL sem bloquear a gravação do funcionário.
+$position_id = null;
+if ($position !== '') {
+    $stmtPos = $pdo->prepare("SELECT id FROM positions WHERE company_id = ? AND TRIM(name) = ?");
+    $stmtPos->execute([$company_id, $position]);
+    $position_id = $stmtPos->fetchColumn() ?: null;
+}
+
+if ($department_id !== null) {
+    $stmtDept = $pdo->prepare("SELECT id FROM departments WHERE id = ? AND company_id = ?");
+    $stmtDept->execute([$department_id, $company_id]);
+    if (!$stmtDept->fetchColumn()) {
+        http_response_code(400);
+        exit('Departamento inválido.');
+    }
+}
+
+if ($manager_id !== null) {
+    if ($id !== null && $manager_id === $id) {
+        http_response_code(400);
+        exit('Um funcionário não pode ser chefe de si próprio.');
+    }
+
+    $stmtMgr = $pdo->prepare("SELECT id, manager_id FROM employees WHERE id = ? AND company_id = ?");
+    $stmtMgr->execute([$manager_id, $company_id]);
+    $manager = $stmtMgr->fetch(PDO::FETCH_ASSOC);
+
+    if (!$manager) {
+        http_response_code(400);
+        exit('Chefia direta inválida.');
+    }
+
+    // Impede ciclos na cadeia de chefia (A chefia B chefia A...), ao
+    // editar um funcionário já existente.
+    if ($id !== null) {
+        $ancestorId = $manager['manager_id'];
+        $depth = 0;
+        while ($ancestorId !== null && $depth < 50) {
+            if ((int)$ancestorId === $id) {
+                http_response_code(400);
+                exit('Essa chefia criaria um ciclo na hierarquia (o funcionário acabaria por chefiar-se a si próprio indiretamente).');
+            }
+            $stmtAsc = $pdo->prepare("SELECT manager_id FROM employees WHERE id = ? AND company_id = ?");
+            $stmtAsc->execute([$ancestorId, $company_id]);
+            $ancestorId = $stmtAsc->fetchColumn();
+            $depth++;
+        }
+    }
 }
 
 /*
@@ -85,6 +139,19 @@ if (!is_dir($uploadDocDir)) {
 |--------------------------------------------------------------------------
 */
 
+// Extensão -> lista de MIME types reais aceites para essa extensão.
+// A extensão sozinha é só o que está escrito no nome do ficheiro; quem faz
+// upload pode renomear qualquer ficheiro para .jpg. finfo_file() lê a
+// assinatura real do ficheiro no disco, que é o que importa para segurança.
+const RH_ALLOWED_MIME_BY_EXT = [
+    'png'  => ['image/png'],
+    'jpg'  => ['image/jpeg'],
+    'jpeg' => ['image/jpeg'],
+    'webp' => ['image/webp'],
+    'gif'  => ['image/gif'],
+    'pdf'  => ['application/pdf'],
+];
+
 function saveUpload($fileKey, $destDir, array $allowedExts)
 {
     if (
@@ -101,6 +168,18 @@ function saveUpload($fileKey, $destDir, array $allowedExts)
 
     if (!in_array($ext, $allowedExts, true)) {
         throw new Exception("Formato inválido para {$fileKey}");
+    }
+
+    // Valida o MIME real do ficheiro (não apenas a extensão do nome).
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $realMime = $finfo ? finfo_file($finfo, $tmp) : false;
+    if ($finfo) {
+        finfo_close($finfo);
+    }
+
+    $expectedMimes = RH_ALLOWED_MIME_BY_EXT[$ext] ?? [];
+    if (!$realMime || !in_array($realMime, $expectedMimes, true)) {
+        throw new Exception("O ficheiro enviado para {$fileKey} não corresponde a um {$ext} válido.");
     }
 
     $fileName = uniqid($fileKey . '_', true) . '.' . $ext;
@@ -219,6 +298,9 @@ try {
                 name = :name,
                 bi = :bi,
                 position = :position,
+                position_id = :position_id,
+                department_id = :department_id,
+                manager_id = :manager_id,
                 salary_base = :salary,
                 status = :status,
 
@@ -228,7 +310,6 @@ try {
                 academic_level = :academic_level,
                 contract_type = :contract_type,
                 admission_date = :admission_date,
-                end_date = :end_date,
                 iban = :iban,
 
                 photo_url = :photo_url,
@@ -244,6 +325,9 @@ try {
             ':name'            => $name,
             ':bi'              => $bi,
             ':position'        => $position,
+            ':position_id'     => $position_id,
+            ':department_id'   => $department_id,
+            ':manager_id'      => $manager_id,
             ':salary'          => $salary,
             ':status'          => $status,
 
@@ -253,7 +337,6 @@ try {
             ':academic_level'  => $academic_level,
             ':contract_type'   => $contract_type,
             ':admission_date'  => $admission_date,
-            ':end_date'        => $end_date,
             ':iban'            => $iban,
 
             ':photo_url'       => $photoUrl,
@@ -279,6 +362,9 @@ try {
                 name,
                 bi,
                 position,
+                position_id,
+                department_id,
+                manager_id,
                 salary_base,
                 status,
 
@@ -288,7 +374,6 @@ try {
                 academic_level,
                 contract_type,
                 admission_date,
-                end_date,
                 iban,
 
                 photo_url,
@@ -301,6 +386,9 @@ try {
                 :name,
                 :bi,
                 :position,
+                :position_id,
+                :department_id,
+                :manager_id,
                 :salary,
                 :status,
 
@@ -310,7 +398,6 @@ try {
                 :academic_level,
                 :contract_type,
                 :admission_date,
-                :end_date,
                 :iban,
 
                 :photo_url,
@@ -326,6 +413,9 @@ try {
             ':name'            => $name,
             ':bi'              => $bi,
             ':position'        => $position,
+            ':position_id'     => $position_id,
+            ':department_id'   => $department_id,
+            ':manager_id'      => $manager_id,
             ':salary'          => $salary,
             ':status'          => $status,
 
@@ -335,7 +425,6 @@ try {
             ':academic_level'  => $academic_level,
             ':contract_type'   => $contract_type,
             ':admission_date'  => $admission_date,
-            ':end_date'        => $end_date,
             ':iban'            => $iban,
 
             ':photo_url'       => $newPhoto,
