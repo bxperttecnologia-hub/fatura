@@ -2,31 +2,30 @@
 node_modules/
 **/node_modules/
 
-
+# Projectos / ficheiros específicos
 bxintelligence-api-rest/
 **/bxintelligence-api-rest/
-
-**/config.php
-config.php/
-
 
 next-app/
 **/next-app/
 
+app/config/config.php
+**/app/config/config.php
 
 # Builds
 .next/
 **/.next/
+
 out/
 dist/
 build/
 
 # Variáveis de ambiente
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
+
+# Arquivos compactados
 *.zip
 
 # Logs
