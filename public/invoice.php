@@ -2,7 +2,7 @@
 require_once '../app/views/layout_creation.php';
 ?>
 <style>
-:root {
+    :root {
         --invoice-surface: #ffffff;
         --invoice-bg: #f4f7fb;
         --invoice-border: #e5e7eb;
@@ -28,41 +28,41 @@ require_once '../app/views/layout_creation.php';
         padding: 0 1rem 2rem;
     }
 
+    /* ===== layout: fatura à esquerda, card de ações à direita ===== */
     .invoice-layout {
         display: flex;
         justify-content: center;
         align-items: flex-start;
+        gap: 1.25rem;
     }
 
     .invoice-preview-panel {
-        width: 100%;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
+        flex: 0 1 210mm;
+        min-width: 0;
     }
 
-    .invoice-header {
-        width: 100%;
-        max-width: 190mm;
-        background: var(--invoice-surface);
-        border: 1px solid var(--invoice-border);
-        border-radius: 18px 18px 12px 12px;
-        padding: 1.25rem 1.5rem 1rem;
-        box-shadow: var(--invoice-shadow);
-        color: var(--invoice-text);
-    }
-
-    .pagea4 {
-        width: 190mm;
+    /* div que mostra o layout da fatura: uma página A4; o conteúdo rola dentro dela */
+    #fatura-container {
+        width: 210mm;
         max-width: 100%;
         margin: 0 auto;
+        height: 297mm;
+        max-height: calc(100vh - 2rem);
+        overflow-x: hidden;
+        overflow-y: scroll;
     }
 
-    .invoice-header__top {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 1rem;
+    /* ===== card lateral ===== */
+    .invoice-side-card {
+        flex: 0 0 300px;
+        width: 300px;
+        background: var(--invoice-surface);
+        border: 1px solid var(--invoice-border);
+        border-radius: 16px;
+        padding: 1.25rem;
+        box-shadow: var(--invoice-shadow);
+        color: var(--invoice-text);
+        margin-top: 90px;
     }
 
     .invoice-header__eyebrow {
@@ -79,7 +79,7 @@ require_once '../app/views/layout_creation.php';
 
     .invoice-header__title {
         margin: 0;
-        font-size: clamp(1.35rem, 2vw, 2rem);
+        font-size: clamp(1.35rem, 2vw, 1.7rem);
         line-height: 1.2;
         font-weight: 700;
         color: var(--invoice-text);
@@ -132,21 +132,29 @@ require_once '../app/views/layout_creation.php';
     }
 
     .invoice-toolbar {
-        width: 100%;
-        max-width: 190mm;
         display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: .75rem;
+        flex-direction: column;
+        gap: .6rem;
         margin-top: 1rem;
-        padding-top: .85rem;
+        padding-top: 1rem;
         border-top: 1px solid var(--invoice-border);
     }
 
-    .invoice-toolbar__group {
+    .invoice-toolbar .btn-invoice {
+        width: 100%;
+    }
+
+    .invoice-actions {
         display: flex;
-        flex-wrap: wrap;
-        gap: .75rem;
+        flex-direction: column;
+        gap: .15rem;
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--invoice-border);
+    }
+
+    .invoice-actions .dropdown-item {
+        min-height: 40px;
     }
 
     .btn-invoice {
@@ -222,14 +230,6 @@ require_once '../app/views/layout_creation.php';
     .btn-invoice--ghost:hover {
         background: var(--invoice-secondary);
         border-color: #c8d0db;
-    }
-
-    .invoice-more {
-        margin-left: auto;
-    }
-
-    .invoice-more .dropdown-toggle {
-        min-width: 148px;
     }
 
     .dropdown-menu {
@@ -340,9 +340,49 @@ require_once '../app/views/layout_creation.php';
         background: rgba(60, 63, 65, .92);
     }
 
+    /* ===== desktop: card de ações fixo no canto direito ===== */
+    @media (min-width: 992px) {
+
+        /* espaço reservado para o card fixo */
+        .invoice-layout {
+            padding-right: calc(300px + 1.25rem);
+        }
+
+        /* fixo, alinhado com a largura máxima da página */
+        .invoice-side-card {
+            position: fixed;
+            top: 1rem;
+            right: max(1rem, calc((100% - 1240px) / 2 + 1rem));
+            max-height: calc(100vh - 2rem);
+            overflow-y: auto;
+        }
+    }
+
+    /* ===== responsivo ===== */
     @media (max-width: 991.98px) {
         .pp-stage {
             height: 60vh;
+        }
+
+        /* card em cima, fatura em baixo */
+        .invoice-layout {
+            flex-direction: column-reverse;
+            align-items: stretch;
+        }
+
+        .invoice-side-card {
+            position: static;
+            width: 100%;
+            flex-basis: auto;
+        }
+
+        .invoice-preview-panel {
+            flex-basis: auto;
+        }
+
+        /* no ecrã pequeno a fatura faz scroll horizontal em vez de ser cortada */
+        #fatura-container {
+            overflow-x: auto;
         }
     }
 
@@ -351,145 +391,90 @@ require_once '../app/views/layout_creation.php';
             margin-top: 1.25rem;
             padding-inline: .75rem;
         }
-
-        .invoice-toolbar {
-            gap: .6rem;
-        }
-
-        .invoice-toolbar__group {
-            width: 100%;
-        }
-
-        .btn-invoice {
-            flex: 1 1 calc(50% - .4rem);
-            min-width: 0;
-        }
-
-        .invoice-more {
-            width: 100%;
-            margin-left: 0;
-        }
-
-        .invoice-more .dropdown-toggle {
-            width: 100%;
-        }
-    }
-
-    @media (max-width: 480px) {
-        .invoice-header {
-            padding: 1rem;
-        }
-
-        .invoice-header__top {
-            flex-direction: column;
-            align-items: flex-start;
-        }
-
-        .invoice-toolbar__group {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            width: 100%;
-        }
-
-        .btn-invoice {
-            width: 100%;
-            flex-basis: auto;
-        }
     }
 </style>
 
 <main class="invoice-shell">
     <div class="invoice-layout no-print">
+
+        <!-- Esquerda: layout da fatura -->
         <div class="invoice-preview-panel">
-            <div class="invoice-header pagea4">
-                <div class="invoice-header__top">
-                    <div>
-                        <div class="invoice-header__eyebrow">Factura</div>
-                        <h1 class="invoice-header__title">
-                            <strong id="fatura-id">-</strong>
-                            <span id="status-invoice" class="invoice-status-badge is-draft d-none"></span>
-                        </h1>
-                        <span class="invoice-header__subtitle" id="subtitle-client">-</span>
-                        <div class="invoice-header__meta">Original</div>
-                    </div>
-                </div>
-
-                <div class="invoice-toolbar" aria-label="Ações da fatura">
-                    <div class="invoice-toolbar__group">
-                        <button type="button" class="btn-invoice btn-invoice--primary d-none" id="btnRecibo" aria-label="Pagamento e recibo">
-                            <span class="material-icons-outlined" aria-hidden="true">paid</span>
-                            Pagamento / Recibo
-                        </button>
-                    </div>
-
-                    <div class="invoice-toolbar__group">
-                        <div class="d-none" id="generatePdf">
-                            <button class="btn-invoice btn-invoice--secondary" type="button" id="btnFormatoImpressao"
-                                data-bs-toggle="modal" data-bs-target="#modalPrintPreview" aria-label="Imprimir ou baixar a factura">
-                                <span class="material-icons-outlined" aria-hidden="true">print</span>
-                                Imprimir / Baixar
-                            </button>
-                        </div>
-
-                        <button type="button" class="btn-invoice btn-invoice--secondary d-none" id="btnEnviar"
-                            data-bs-toggle="modal" data-bs-target="#modalEnviarEmail" aria-label="Enviar factura por e-mail">
-                            <span class="material-icons-outlined" aria-hidden="true">send</span>
-                            Enviar factura
-                        </button>
-                    </div>
-
-                    <div class="dropdown invoice-more" id="moreActionsDropdown">
-                        <button class="btn-invoice btn-invoice--ghost dropdown-toggle" type="button" id="btnMaisAccoes"
-                            data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="menu" aria-label="Mais ações da factura">
-                            <span class="material-icons-outlined" aria-hidden="true">more_horiz</span>
-                            Mais ações
-                        </button>
-
-                        <div class="dropdown-menu dropdown-menu-end" aria-labelledby="btnMaisAccoes">
-                            <button type="button" class="dropdown-item d-none" id="btnCloneToInvoice" aria-label="Clonar factura">
-                                <span class="material-icons-outlined" aria-hidden="true">content_copy</span>
-                                Clonar factura
-                            </button>
-
-                            <button type="button" class="dropdown-item d-none" id="btnNotaCredito" aria-label="Emitir nota de crédito">
-                                <span class="material-icons-outlined" aria-hidden="true">assignment_return</span>
-                                Nota de crédito
-                            </button>
-
-                            <button type="button" class="dropdown-item d-none" id="btnNotaDebito" aria-label="Emitir nota de débito">
-                                <span class="material-icons-outlined" aria-hidden="true">request_quote</span>
-                                Nota de débito
-                            </button>
-
-                            <button type="button" class="dropdown-item d-none" id="btnNotaEntrega" aria-label="Emitir nota de entrega">
-                                <span class="material-icons-outlined" aria-hidden="true">local_shipping</span>
-                                Nota de entrega
-                            </button>
-
-                            <button type="button" class="dropdown-item d-none" id="btnEditar" aria-label="Editar factura">
-                                <span class="material-icons-outlined" aria-hidden="true">edit</span>
-                                Editar
-                            </button>
-
-                            <button type="button" class="dropdown-item d-none" id="btnFinalizar" aria-label="Finalizar factura">
-                                <span class="material-icons-outlined" aria-hidden="true">check_circle</span>
-                                Finalizar
-                            </button>
-
-                            <button type="button" class="dropdown-item danger d-none" id="btnDeleteInvoice" aria-label="Apagar factura">
-                                <span class="material-icons-outlined" aria-hidden="true">delete</span>
-                                Apagar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <div id="preloader" style="display:none;">Carregando...</div>
             <div id="fatura-container" class="invoiceContainer shadow-sm bg-white">
                 <!-- aqui dentro já está todo o HTML da fatura -->
             </div>
         </div>
+
+        <!-- Direita: card com informação + botões -->
+        <aside class="invoice-side-card" aria-label="Ações da fatura">
+            <div class="invoice-header__eyebrow">Factura</div>
+            <h1 class="invoice-header__title">
+                <strong id="fatura-id">-</strong>
+                <span id="status-invoice" class="invoice-status-badge is-draft d-none"></span>
+            </h1>
+            <span class="invoice-header__subtitle" id="subtitle-client">-</span>
+            <div class="invoice-header__meta">Original</div>
+
+            <div class="invoice-toolbar" aria-label="Ações principais">
+                <button type="button" class="btn btn-success d-none" id="btnRecibo" aria-label="Pagamento e recibo">
+                    <span class="material-icons-outlined" aria-hidden="true">paid</span>
+                    Pagamento / Recibo
+                </button>
+
+                <div class="d-none" id="generatePdf">
+                    <button class="btn-invoice btn-invoice--secondary" type="button" id="btnFormatoImpressao"
+                        data-bs-toggle="modal" data-bs-target="#modalPrintPreview" aria-label="Imprimir ou baixar a factura">
+                        <span class="material-icons-outlined" aria-hidden="true">print</span>
+                        Imprimir / Baixar
+                    </button>
+                </div>
+
+                <button type="button" class="btn-invoice btn-invoice--secondary d-none" id="btnEnviar"
+                    data-bs-toggle="modal" data-bs-target="#modalEnviarEmail" aria-label="Enviar factura por e-mail">
+                    <span class="material-icons-outlined" aria-hidden="true">send</span>
+                    Enviar factura
+                </button>
+            </div>
+
+            <div class="invoice-actions" id="moreActionsDropdown">
+                <span class="pp-label">Mais ações</span>
+
+                <button type="button" class="dropdown-item d-none" id="btnCloneToInvoice" aria-label="Clonar factura">
+                    <span class="material-icons-outlined" aria-hidden="true">content_copy</span>
+                    Clonar factura
+                </button>
+
+                <button type="button" class="dropdown-item d-none" id="btnNotaCredito" aria-label="Emitir nota de crédito">
+                    <span class="material-icons-outlined" aria-hidden="true">assignment_return</span>
+                    Nota de crédito
+                </button>
+
+                <button type="button" class="dropdown-item d-none" id="btnNotaDebito" aria-label="Emitir nota de débito">
+                    <span class="material-icons-outlined" aria-hidden="true">request_quote</span>
+                    Nota de débito
+                </button>
+
+                <button type="button" class="dropdown-item d-none" id="btnNotaEntrega" aria-label="Emitir nota de entrega">
+                    <span class="material-icons-outlined" aria-hidden="true">local_shipping</span>
+                    Nota de entrega
+                </button>
+
+                <button type="button" class="dropdown-item d-none" id="btnEditar" aria-label="Editar factura">
+                    <span class="material-icons-outlined" aria-hidden="true">edit</span>
+                    Editar
+                </button>
+
+                <button type="button" class="dropdown-item d-none" id="btnFinalizar" aria-label="Finalizar factura">
+                    <span class="material-icons-outlined" aria-hidden="true">check_circle</span>
+                    Finalizar
+                </button>
+
+                <button type="button" class="dropdown-item danger d-none" id="btnDeleteInvoice" aria-label="Apagar factura">
+                    <span class="material-icons-outlined" aria-hidden="true">delete</span>
+                    Apagar
+                </button>
+            </div>
+        </aside>
     </div>
 
     <!-- Modal -->
@@ -842,6 +827,6 @@ require_once '../app/views/layout_creation.php';
 </main>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="invoices/invoice.js?v=4.8"></script>
+<script src="invoices/invoice.js?v=4.9"></script>
 
 <?php require_once '../app/views/footer.php'; ?>

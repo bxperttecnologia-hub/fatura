@@ -1,6 +1,10 @@
 <?php
 /*  invoice_public.php
- *  Gera a fatura completa em HTML (modelo Personalité‑like) 
+ *  Pré-visualização HTML da fatura, com o MESMO layout do PDF (invoicePdfService.js):
+ *  - logo, empresa, "Exmo Sr." (cliente), Original/Duplicado
+ *  - tabela com no máximo 15 itens por página ("A transportar…")
+ *  - bloco "Dados fiscais e bancários" + "Sumário" em todas as páginas
+ *  - rodapé: QR code à esquerda, texto AGT à direita do QR, paginação por cópia
  */
 require_once '../../../vendor/autoload.php';
 
@@ -8,133 +12,74 @@ use chillerlan\QRCode\{QRCode, QROptions};
 
 require_once '../../../app/config/db.php';
 
+// ---------- configuração (igual ao PDF) ----------
+const AGT_CERTIFICATE = 'FE/344/AGT/2026';
+const ITEMS_PER_PAGE  = 15;
+const ITEMS_BOTTOM    = 640;   // limite vertical (pt) das linhas da tabela
+const FIRST_ROW_Y     = 360;   // y (pt) da primeira linha da tabela
+$copies = ['Original']; // para ver as duas cópias: ['Original', 'Duplicado']
+
 // ---------- utils ----------
+function e($value): string
+{
+  return htmlspecialchars((string)($value ?? ''), ENT_QUOTES, 'UTF-8');
+}
+
 function formatCurrency(float $value, string $currencySymbol, string $currencyPosition = 'left'): string
 {
-  // formata 1 000 000.5 → 1.000.000,50
   $formatted = number_format($value, 2, ',', '.');
-
   return $currencyPosition === 'left'
     ? "{$currencySymbol} {$formatted}"
     : "{$formatted} {$currencySymbol}";
 }
 
-function dateBr($sqlDate)
+function dateBr($sqlDate): string
 {
   return $sqlDate ? date('d/m/Y', strtotime($sqlDate)) : '-';
 }
-function randomHash($len = 2)
+
+function firstAndLastName(?string $name): string
 {
-  return substr(bin2hex(random_bytes($len)), 0, $len);
+  $name = trim((string)$name);
+  if ($name === '') return '-';
+  $parts = preg_split('/\s+/', $name);
+  return count($parts) === 1 ? $parts[0] : $parts[0] . ' ' . $parts[count($parts) - 1];
 }
 
-// ---------- valor por extenso (pt) ----------
-function extenso_pt(int $n): string
+function itemLabel(array $it): string
 {
-  $n = (int)$n;
-  if ($n === 0) return 'zero';
+  return (string)(($it['name'] ?? '') !== '' ? $it['name'] : ($it['description'] ?? ''));
+}
 
-  $u = ['', 'um', 'dois', 'três', 'quatro', 'cinco', 'seis', 'sete', 'oito', 'nove'];
-  $d10 = ['dez', 'onze', 'doze', 'treze', 'catorze', 'quinze', 'dezasseis', 'dezassete', 'dezoito', 'dezanove'];
-  $t = ['', '', 'vinte', 'trinta', 'quarenta', 'cinquenta', 'sessenta', 'setenta', 'oitenta', 'noventa'];
-  $c = ['', 'cem', 'duzentos', 'trezentos', 'quatrocentos', 'quinhentos', 'seiscentos', 'setecentos', 'oitocentos', 'novecentos'];
+// altura estimada (pt) de uma linha: mínimo 17, cresce com descrições longas
+function itemHeight(array $it): float
+{
+  $lines = max(1, (int)ceil(mb_strlen(itemLabel($it)) / 36));
+  return max(17, $lines * 9.6 + 7);
+}
 
-  $parts = [];
+// quebra os itens em páginas (máx. 15 por página e limite vertical)
+function paginateItems(array $items): array
+{
+  $pages = [];
+  $current = [];
+  $y = FIRST_ROW_Y;
 
-  $bilhao = intdiv($n, 1000000000);
-  $n %= 1000000000;
-  if ($bilhao) {
-    $parts[] = ($bilhao === 1 ? 'um bilião' : extenso_pt($bilhao) . ' biliões');
-  }
-
-  $milhao = intdiv($n, 1000000);
-  $n %= 1000000;
-  if ($milhao) {
-    $parts[] = ($milhao === 1 ? 'um milhão' : extenso_pt($milhao) . ' milhões');
-  }
-
-  $mil = intdiv($n, 1000);
-  $n %= 1000;
-  if ($mil) {
-    $parts[] = ($mil === 1 ? 'mil' : extenso_pt($mil) . ' mil');
-  }
-
-  if ($n) {
-    $cent = intdiv($n, 100);
-    $dez = $n % 100;
-
-    $chunk = [];
-    if ($cent) {
-      if ($cent === 1 && $dez > 0) {
-        $chunk[] = 'cento';
-      } else {
-        $chunk[] = $c[$cent];
-      }
+  foreach ($items as $it) {
+    $h = itemHeight($it);
+    if ($current && (count($current) >= ITEMS_PER_PAGE || $y + $h > ITEMS_BOTTOM)) {
+      $pages[] = $current;
+      $current = [];
+      $y = FIRST_ROW_Y;
     }
-
-    if ($dez) {
-      if ($dez < 10) {
-        $chunk[] = $u[$dez];
-      } elseif ($dez < 20) {
-        $chunk[] = $d10[$dez - 10];
-      } else {
-        $dezenas = intdiv($dez, 10);
-        $unid = $dez % 10;
-        if ($unid) {
-          $chunk[] = $t[$dezenas] . ' e ' . $u[$unid];
-        } else {
-          $chunk[] = $t[$dezenas];
-        }
-      }
-    }
-
-    $parts[] = implode(' e ', $chunk);
+    $current[] = $it;
+    $y += $h;
   }
 
-  // junta com " e " apenas no último elo quando fizer sentido
-  if (count($parts) === 1) return $parts[0];
-  $last = array_pop($parts);
-  return implode(' ', $parts) . ' e ' . $last;
+  if ($current || !$pages) $pages[] = $current;
+  return $pages;
 }
 
-function moneyToWords(float $value, string $currencyIso = 'AOA'): string
-{
-  $value = round($value, 2);
-  $int = (int)floor($value);
-  $cents = (int)round(($value - $int) * 100);
-
-  // Se intl estiver disponível no PHP-FPM, usa NumberFormatter.
-  // Caso contrário, usa fallback local (evita página "cortar" no meio por Fatal error).
-  if (class_exists('NumberFormatter')) {
-    $locale = 'pt';
-    $fmt = new NumberFormatter($locale, NumberFormatter::SPELLOUT);
-    $intWords = trim((string)$fmt->format($int));
-    $centWords = $cents > 0 ? trim((string)$fmt->format($cents)) : '';
-  } else {
-    $intWords = extenso_pt($int);
-    $centWords = $cents > 0 ? extenso_pt($cents) : '';
-  }
-
-  // moeda (AOA -> Kz)
-  $currencyName = match (strtoupper($currencyIso)) {
-    'AOA' => 'Kz',
-    'BRL' => ($int === 1 ? 'real' : 'reais'),
-    'EUR' => ($int === 1 ? 'euro' : 'euros'),
-    'USD' => ($int === 1 ? 'dólar' : 'dólares'),
-    default => 'unidades',
-  };
-
-  $centName = ($cents === 1 ? 'centavo' : 'centavos');
-
-  $out = $intWords . ' ' . $currencyName;
-  if ($cents > 0) {
-    $out .= ' e ' . $centWords . ' ' . $centName;
-  }
-
-  // primeira letra maiúscula
-  $out = mb_strtoupper(mb_substr($out, 0, 1)) . mb_substr($out, 1);
-  return $out;
-}
 // ---------- input ----------
 $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
 if (!$id) {
@@ -182,420 +127,584 @@ WHERE  ii.invoice_id = :id");
 $stmt->execute(['id' => $id]);
 $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// ---------- taxas ----------
-$stmt = $pdo->prepare("
-SELECT  ii.tax AS tax_rate,
-        ROUND(SUM(ii.unit_price * ii.quantity * (1 - (ii.discount/100))),2) AS tax_base,
-SUM(ii.unit_price * ii.quantity * (1 - (ii.discount/100)) * (ii.tax/100)) AS tax_value
-FROM   invoice_items ii
-WHERE  ii.invoice_id = :id
-GROUP BY ii.tax");
-$stmt->execute(['id' => $id]);
-$taxes = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
 // ---------- QR ----------
-$hash = randomHash();
 $qrData = "https://bxpert.co.ao/sistema/invoice_public.php?id={$inv['id']}";
-
 $opts = new QROptions([
   'outputType'   => QRCode::OUTPUT_IMAGE_PNG,
   'eccLevel'     => QRCode::ECC_L,
   'scale'        => 3,
-  'addQuietzone'   => false,
-  'imageBase64'  => true,   // a lib já põe 'data:image/png;base64,...'
+  'addQuietzone' => false,
+  'imageBase64'  => true,
 ]);
+$qrSrc = (new QRCode($opts))->render($qrData);
 
-$qrSrc = (new QRCode($opts))->render($qrData); // já vem pronta
+// ---------- dados preparados para o layout ----------
+$symbol = (string)$inv['moneySymbol'];
+$pos    = (string)$inv['moneyPos'];
+$money  = fn($v) => formatCurrency((float)$v, $symbol, $pos);
 
-/* ================================================================
- * 1. DEPOIS de buscar a fatura ($inv) calcule quanto já foi pago
- * --------------------------------------------------------------- */
-$stmt = $pdo->prepare("
-    SELECT  COALESCE(SUM(amount_paid),0) AS paid_total   
-    FROM    receipts
-    WHERE   invoice_id = :id
-");
-$stmt->execute(['id' => $id]);
-$paid_total = (float)$stmt->fetchColumn();
+$issueBr = dateBr($inv['issue_date']);
+$dueDays = (int)$inv['due_date'];
+$dueBr = $inv['issue_date']
+  ? dateBr((new DateTime($inv['issue_date']))->modify("+{$dueDays} days")->format('Y-m-d'))
+  : '-';
 
-$saldo = max(0, $inv['final_total'] - $paid_total);
+$companyAddress = implode(', ', array_filter([$inv['company_address'], $inv['company_city'], $inv['company_country']]));
+$clientAddress  = implode(', ', array_filter([$inv['client_address'], $inv['client_city'], $inv['client_country']])) ?: 'Luanda - Angola';
+$clientName     = firstAndLastName($inv['client_name']);
+$clientNif      = $inv['client_contributor'] ?: '999999999';
+$clientPhone    = $inv['client_phone'] ?? '-';   // adicione c.phone AS client_phone à query para mostrar o telefone
 
-/*  define um rótulo para exibir no cabeçalho  ------------------- */
-if ($paid_total >= $inv['final_total']) {  // quitada
-  $payLabel = 'Pago';
-  $payClass = 'pago';       // usa .badge.pago (verde) que já existe
-} elseif ($paid_total > 0) {                      // parcial
-  $payLabel = 'Pago parcial';
-  $payClass = 'pendente';   // amarelo – já tinha no CSS
-} else {                                        // nada pago
-  $payLabel = 'Pendente';
-  $payClass = 'pendente';
-}
+$vatRegime = match (strtolower((string)($inv['vat_regime'] ?? ''))) {
+  'geral'        => 'Regime Geral',
+  'simplificado' => 'Regime Simplificado',
+  default        => '-',
+};
 
+$ibanRaw = preg_replace('/[.\s]/', '', (string)($inv['iban'] ?? ''));
+$iban = $ibanRaw !== ''
+  ? trim(substr($ibanRaw, 0, 4) . ' ' . trim(chunk_split(substr($ibanRaw, 4), 4, ' ')))
+  : '-';
 
-// ---------- HTML ----------
+$isDraft  = (int)$inv['status'] === 1;
+$docTitle = ($isDraft ? 'Factura Rascunho' : 'Factura') . ' n.º ' . ($isDraft ? '' : (string)$inv['reference']);
+
+$pages = paginateItems($items);
+$pageCount = count($pages);
 ?>
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-PT">
 
 <head>
   <meta charset="utf-8">
-  <title>Fatura <?= htmlspecialchars($inv['codigo']) ?></title>
-  <link rel="stylesheet" href="<?= htmlspecialchars($publicBasePath . '/invoices/invoice.css') ?>">
-  <link rel="stylesheet" href="<?= htmlspecialchars($publicBasePath . '/invoices/invoice_footer.css') ?>">
-  <!-- <meta http-equiv="refresh" content="2"> -->
+  <title>Fatura <?= e($inv['codigo']) ?></title>
+  <style>
+    @page {
+      size: A4;
+      margin: 0;
+    }
 
+    /* Reset com especificidade 0: não "vaza" para a página que embute esta fatura.
+       As regras de p/h1/h2 abaixo (.page p ...) vencem os estilos do Bootstrap. */
+    :where(.page, .page *) {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    .page h1,
+    .page h2,
+    .page p {
+      margin: 0;
+      padding: 0;
+    }
+
+    /* fundo cinzento só quando o ficheiro é aberto sozinho */
+    html:has(body.invoice-public),
+    body.invoice-public {
+      background: #e9e9e9;
+    }
+
+    body.invoice-public {
+      margin: 0;
+    }
+
+    /* A4 em pontos: as coordenadas abaixo são as mesmas do PDF */
+    .page {
+      position: relative;
+      width: 595.28pt;
+      height: 841.89pt;
+      margin: 16pt auto;
+      background: #fff;
+      overflow: hidden;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, .15);
+      font-family: Helvetica, Arial, sans-serif;
+      color: #707070;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    @media print {
+
+      html:has(body.invoice-public),
+      body.invoice-public {
+        background: #fff;
+      }
+
+      .page {
+        margin: 0;
+        box-shadow: none;
+        page-break-after: always;
+        break-after: page;
+      }
+
+      .page:last-child {
+        page-break-after: auto;
+        break-after: auto;
+      }
+    }
+
+    .abs {
+      position: absolute;
+    }
+
+    /* ---------- cabeçalho ---------- */
+    .logo {
+      position: absolute;
+      left: 45pt;
+      top: 35pt;
+      width: 70pt;
+    }
+
+    .company {
+      position: absolute;
+      left: 45pt;
+      top: 120pt;
+      width: 390pt;
+    }
+
+    .company h1 {
+      font-size: 17pt;
+      line-height: 20pt;
+      color: #000;
+      text-transform: uppercase;
+    }
+
+    .company p {
+      font-size: 9pt;
+      line-height: 14pt;
+      color: #707070;
+    }
+
+    .client {
+      position: absolute;
+      left: 457pt;
+      top: 120pt;
+      width: 93pt;
+    }
+
+    .client h2 {
+      font-size: 12pt;
+      line-height: 14pt;
+      color: #000;
+    }
+
+    .client p {
+      font-size: 9pt;
+      line-height: 14pt;
+      color: #707070;
+    }
+
+    /* ---------- documento ---------- */
+    .copy {
+      position: absolute;
+      left: 45pt;
+      top: 220pt;
+      font-size: 10pt;
+      color: #707070;
+    }
+
+    .doc-title {
+      position: absolute;
+      left: 45pt;
+      top: 238pt;
+      font-size: 12pt;
+      font-weight: bold;
+      color: #000;
+    }
+
+    .rule {
+      position: absolute;
+      left: 45pt;
+      top: 263pt;
+      width: 505pt;
+      border-top: 1.5pt solid #8C8C8C;
+    }
+
+    .drow {
+      position: absolute;
+      left: 0;
+      width: 100%;
+      font-size: 9pt;
+      line-height: 11pt;
+    }
+
+    .drow span {
+      position: absolute;
+      top: 0;
+    }
+
+    .r1 {
+      top: 273pt;
+    }
+
+    .r2 {
+      top: 291pt;
+    }
+
+    .r3 {
+      top: 309pt;
+    }
+
+    .x1 {
+      left: 45pt;
+    }
+
+    .x2 {
+      left: 145pt;
+    }
+
+    .x3 {
+      left: 365pt;
+    }
+
+    .x4 {
+      left: 455pt;
+    }
+
+    .strong {
+      font-weight: bold;
+      color: #444;
+    }
+
+    /* ---------- tabela + totais (fluxo) ---------- */
+    .flow {
+      position: absolute;
+      left: 45pt;
+      top: 324pt;
+      width: 505pt;
+    }
+
+    .t-head {
+      position: relative;
+      height: 20pt;
+      margin-bottom: 16pt;
+      padding-top: 10pt;
+      border-top: 1pt solid #8C8C8C;
+      border-bottom: .8pt solid #D2D2D2;
+      font-size: 8pt;
+      font-weight: bold;
+      color: #555;
+    }
+
+    .t-head span {
+      position: absolute;
+      top: 10pt;
+      line-height: 10pt;
+    }
+
+    .t-body {
+      min-height: 130pt;
+      padding-bottom: 10pt;
+    }
+
+    .t-body.has-carry {
+      padding-bottom: 0;
+    }
+
+    /* .irow (antes .row): evita conflito com o .row do Bootstrap */
+    .irow {
+      position: relative;
+      display: block;
+      min-height: 17pt;
+      padding-bottom: 7pt;
+      font-size: 8pt;
+      line-height: 9.6pt;
+      color: #666;
+    }
+
+    .irow .desc {
+      margin-left: 90pt;
+      width: 155pt;
+    }
+
+    .irow span.c {
+      position: absolute;
+      top: 0;
+      white-space: nowrap;
+    }
+
+    .c-code {
+      left: 5pt;
+      width: 80pt;
+      white-space: normal !important;
+    }
+
+    .c-price {
+      left: 250pt;
+      width: 55pt;
+      text-align: right;
+    }
+
+    .c-qty {
+      left: 310pt;
+      width: 30pt;
+      text-align: center;
+    }
+
+    .c-tax {
+      left: 343pt;
+      width: 42pt;
+      text-align: center;
+    }
+
+    .c-disc {
+      left: 388pt;
+      width: 35pt;
+      text-align: center;
+    }
+
+    .c-total {
+      left: 430pt;
+      width: 70pt;
+      text-align: right;
+    }
+
+    .carry {
+      margin-top: 2pt;
+      height: 14pt;
+      text-align: right;
+      font-size: 8pt;
+      font-style: italic;
+      color: #707070;
+    }
+
+    /* ---------- totais ---------- */
+    .totals {
+      position: relative;
+      height: 136pt;
+      border-top: 1.5pt solid #8C8C8C;
+      font-size: 8.5pt;
+      line-height: 10pt;
+      color: #707070;
+    }
+
+    .totals .t,
+    .totals .a {
+      position: absolute;
+    }
+
+    .totals .title {
+      font-size: 10pt;
+      font-weight: bold;
+      color: #555;
+      top: 8pt;
+    }
+
+    .totals .hline {
+      position: absolute;
+      top: 24pt;
+      border-top: .8pt solid #C4C4C4;
+    }
+
+    .lv {
+      left: 100pt;
+      width: 190pt;
+    }
+
+    .rv {
+      left: 405pt;
+      width: 100pt;
+      text-align: right;
+    }
+
+    .rl {
+      left: 320pt;
+    }
+
+    .totals .sep1 {
+      position: absolute;
+      left: 320pt;
+      width: 180pt;
+      top: 106pt;
+      border-top: 1pt solid #555;
+    }
+
+    .totals .final {
+      position: absolute;
+      top: 116pt;
+      font-size: 12pt;
+      font-weight: bold;
+      color: #000;
+      line-height: 14pt;
+    }
+
+    .totals .sep2 {
+      position: absolute;
+      left: 320pt;
+      width: 180pt;
+      top: 134pt;
+      border-top: 2pt solid #555;
+    }
+
+    /* ---------- rodapé ---------- */
+    .qr {
+      position: absolute;
+      left: 45pt;
+      top: 772pt;
+      width: 55pt;
+      height: 55pt;
+    }
+
+    .agt {
+      position: absolute;
+      left: 112pt;
+      top: 796pt;
+      width: 340pt;
+      font-size: 8pt;
+      color: #000;
+      white-space: nowrap;
+    }
+
+    .pg {
+      position: absolute;
+      left: 500pt;
+      top: 796pt;
+      width: 50pt;
+      text-align: right;
+      font-size: 8pt;
+      color: #000;
+    }
+  </style>
 </head>
 
-<body>
-  <main class="invoice-page">
+<body class="invoice-public">
+  <?php foreach ($copies as $copyLabel): ?>
+    <?php foreach ($pages as $pageIndex => $pageItems):
+      $isLast = $pageIndex === $pageCount - 1; ?>
 
-    <!-- ===== HEADER (100% flex) ===== -->
-    <div class="inv-header d-flex justify-content-between pb-2">
+      <section class="page">
 
-      <!-- ESQUERDA: logo + dados empresa -->
-      <div class="inv-left d-flex flex-column align-items-start">
-        <div id="company-info">
-          <!-- PHP ancora o conteúdo aqui -->
-          <h6 style="width: 250px !important;" class="fw-bold fs-6 mb-1 tag-title text-uppercase"><?= htmlspecialchars($inv['company_name']) ?></h6>
-          <p class="mb-0">
-            <?= nl2br(htmlspecialchars(
-              $inv['company_address'] . ', ' .
-                $inv['company_city'] . ' - ' .
-                $inv['company_country']
-            )) ?>
-            <br>
-          </p> <?= htmlspecialchars("") ?></p>
-          <p class="mb-0">Tel: <?= htmlspecialchars($inv['company_phone']) ?></p>
-          <p class="mb-0">E-mail: <?= htmlspecialchars($inv['company_email']) ?></p>
-          <p class="mb-0">Website: <?= htmlspecialchars($inv['website']) ?></p>
-          <p class="mb-0">Contribuinte: <?= htmlspecialchars($inv['registration_number']) ?? "" ?></p>
-        </div>
-      </div>
+        <!-- LOGO -->
+        <?php if ($logoFile !== ''): ?>
+          <img class="logo" src="<?= e($publicBasePath . '/assets/img/companies/' . rawurlencode($logoFile)) ?>" alt="Logo">
+        <?php endif; ?>
 
-      <!-- DIREITA: QR + dados cliente -->
-      <div class="inv-right d-flex flex-column align-items-start justify-content-end">
-        <div id="invoice_logoCompanies" class="me-3" style="margin-left: 120px;">
-          <img src="<?= htmlspecialchars($publicBasePath . '/assets/img/companies/' . rawurlencode($logoFile)) ?>" alt="Logo">
+        <!-- EMPRESA -->
+        <div class="company">
+          <h1><?= e($inv['company_name']) ?></h1>
+          <p><?= e($companyAddress ?: '-') ?></p>
+          <p>Tel: <?= e($inv['company_phone'] ?: '-') ?></p>
+          <p>E-mail: <?= e($inv['company_email'] ?: '-') ?></p>
+          <p>Contribuinte: <?= e($inv['registration_number'] ?: '-') ?></p>
         </div>
 
-      </div>
-
-    </div><!-- /inv-header -->
-
-
-    <?php
-    $issueBr = dateBr($inv['issue_date']);
-    $dueDays = (int)$inv['due_date'];
-    $dueBr = dateBr((new DateTime($inv['issue_date']))
-      ->modify("+{$dueDays} days")
-      ->format('Y-m-d'));
-    ?>
-    <!-- ===== META ===== -->
-    <section class="inv-meta pt-2 mt-5">
-
-      <div class="d-flex justify-content-between">
-        <span class="d-block">Original</span>
-
-      </div>
-
-      <span class="d-block fs-6 title-line tag-title">
-        <?= $inv["status"] === 1 ? "Factura Rascunho" : "Factura" ?> n.º <?= htmlspecialchars($inv['status'] != 1 ? $inv['reference'] :  " ") ?>
-      </span>
-
-      <!-- Bloco flex com 2 colunas -->
-      <div class="meta-row lh-1">
-
-        <!-- ===== COLUNA ESQUERDA – DATAS & REF ===== -->
-        <div class="meta-mini mt-2">
-
-          <div class="vals">
-            <span class="small">Cliente:</span><span class="small opacity-75 fw-semibold text-uppercase" style="margin-left: -50px !important; color: black;"><?= htmlspecialchars($inv['client_name']) ?></span>
-          </div>
-          <div class="vals">
-            <span class="mb-0 small">Contribuinte:</span><span class="small" style="margin-left: -50px !important;"><?= htmlspecialchars($inv['client_contributor'] ?? '', ENT_QUOTES, 'UTF-8') ?></span>
-          </div>
-
-          <div class="vals">
-            <span class="small">Endereço:</span><span class="small" class="lh-1" style="text-wrap: wrap; margin-left: -50px !important; width: 200px !important; overflow: hidden !important;"><?= nl2br(htmlspecialchars($inv['client_address'])) ?>, <?= htmlspecialchars("{$inv['client_city']} - {$inv['client_country']}") ?></span>
-          </div>
-
+        <!-- CLIENTE -->
+        <div class="client">
+          <h2>Exmo Sr.</h2>
+          <p><?= e($clientName) ?></p>
+          <p>NIF: <?= e($clientNif) ?></p>
+          <p><?= e($clientPhone) ?></p>
         </div>
 
-        <!-- ===== COLUNA DIREITA – OBSERVAÇÕES ===== -->
-        <div class="meta-mini mt-2">
-          <div class="vals">
-            <span class="small" style="margin-left: 55px">Data de emissão:</span><span class="small" style="margin-left: 30px !important;"><?= $issueBr ?></span>
-          </div>
-          <div class="vals">
-            <span class="small" style="margin-left: 55px">Vencimento:</span><span class="small" style="margin-left: 30px !important;"><?= $dueBr ?></span>
-          </div>
-          <div class="vals">
-            <span class="small" style="margin-left: 55px">Observações:</span><span class="small" style="text-wrap: wrap; margin-left: 67px !important; width: 200px !important; overflow: hidden !important;" class="lh-1"><?= $inv['observation'] ? htmlspecialchars($inv['observation']) : '-' ?></span>
-          </div>
+        <!-- DOCUMENTO -->
+        <div class="copy"><?= e($copyLabel) ?></div>
+        <div class="doc-title"><?= e($docTitle) ?></div>
+        <div class="rule"></div>
+
+        <div class="drow r1">
+          <span class="x1">Cliente:</span>
+          <span class="x2 strong" style="width:200pt"><?= e($clientName) ?></span>
+          <span class="x3">Data de emissão:</span>
+          <span class="x4"><?= e($issueBr) ?></span>
+        </div>
+        <div class="drow r2">
+          <span class="x1">Contribuinte:</span>
+          <span class="x2"><?= e($clientNif) ?></span>
+          <span class="x3">Vencimento:</span>
+          <span class="x4"><?= e($dueBr) ?></span>
+        </div>
+        <div class="drow r3">
+          <span class="x1">Endereço:</span>
+          <span class="x2" style="width:180pt"><?= e($clientAddress) ?></span>
+          <span class="x3">Observações:</span>
+          <span class="x4" style="width:95pt"><?= e($inv['observation'] ?: '-') ?></span>
         </div>
 
-      </div>
-    </section>
+        <!-- TABELA + TOTAIS -->
+        <div class="flow">
 
-
-    <!-- ===== ITENS (sem <table>) ===== -->
-    <div class="items-grid mt-4 title-line pb-5 lh-1" style="border-bottom: 2.5px solid #8b8b8b !important; border-top: 2.5px solid #8b8b8b !important; border-bottom: 2.5px solid #8b8b8b !important">
-
-      <!-- cabeçalho -->
-      <div class="items-row items-head">
-        <span class="fw-bold tag-title" style="margin-left: -10px; opacity: .6;">Código</span>
-        <span class="fw-bold mt-0 tag-title" style="margin-left: -65px !important; font-weight: bold; opacity: .6; font-size: 10px !important;">Descrição</span>
-        <span class="fw-bold tag-title" style="margin-left: 58px; width: 100px; opacity: .6;">Preço&nbsp;Uni.</span>
-        <span class="fw-bold tag-title" style="margin-left: 72px; opacity: .6;">Qtd.</span>
-        <span class="fw-bold tag-title" style="margin-left: 56px; opacity: .6;">Taxa/IVA&nbsp;</span>
-        <span class="fw-bold tag-title" style="margin-left: 35px; opacity: .6;">Desc.&nbsp;</span>
-        <span style="float: right !important; text-align: right !important; opacity: .6;" class="fw-bold tag-title">Total</span>
-      </div>
-
-      <!-- linhas dinâmicas -->
-      <?php foreach ($items as $it):
-        $base = $it['unit_price'] * $it['quantity'];
-        $discount = $base * ($it['discount'] / 100);
-        $tax = ($base - $discount) * ($it['tax'] / 100);
-        $total = $base - $discount + $tax; ?>
-        <div class="items-row mb-3">
-          <span class="fw-light lh-1 mt-1" style="width: 90px !important; font-size: 10px !important;"><?= htmlspecialchars($it['code']) ?></span>
-          <span class="fw-light lh-1 mt-1" style="width: 250px !important; margin-left: 50px !important; text-wrap: wrap !important; font-size: 10.5px !important;"><?= htmlspecialchars($it['name'] ? $it['name'] : $it['description']) ?></span>
-          <span class="fw-light lh-1 mt-1" style="margin-left: 10px; font-size: 10px !important;">
-            <?= formatCurrency($it['unit_price'], $inv['moneySymbol'], $inv['moneyPos']) ?>
-          </span>
-          <span class="center fw-light lh-sm" style="margin-left: -38px; font-size: 10px !important;"><?= $it['quantity'] ?></span>
-          <span class="center fw-light lh-sm" style="margin-left: -70px; font-size: 10px !important;"><?= $it['tax'] ?>%</span>
-          <span class="center fw-light lh-sm" style="margin-left: -120px; font-size: 10px !important;"><?= $it['discount'] ?>%</span>
-          <span class="right fw-light lh-sm" style="margin-left: -66px; width: 100px; font-size: 10px !important;">
-            <?= formatCurrency($total, $inv['moneySymbol'], $inv['moneyPos']) ?>
-          </span>
-        </div>
-      <?php endforeach; ?>
-    </div>
-
-
-    <!-- ===== TAXAS & RESUMO (sem <table>) ===== -->
-    <div class="totals-wrap">
-
-      <!-- ===== ESQUERDA – Impostos/IVA ===== -->
-      <div style="width: 384px !important;">
-
-        <div class="sum-head tag-title small" style="opacity: .6;">Dados fiscais e bancários</div>
-
-        <div class="lh-1">
-
-          <div class="sum-row mt-2">
-            <span class="small">Regime de IVA:</span>
-            <span class="small" style="margin-left: -90px; width: 250px !important;"><?= match ($inv["vat_regime"]) {
-                                                                                        "geral" => "Regime Geral",
-                                                                                        "simplificado" => "Regime Simplificado",
-                                                                                        default => ""
-                                                                                      } ?>
-            </span>
+          <div class="t-head">
+            <span style="left:5pt;width:80pt">Código</span>
+            <span style="left:90pt;width:155pt">Descrição</span>
+            <span style="left:250pt;width:55pt;text-align:right">Preço Uni.</span>
+            <span style="left:310pt;width:30pt;text-align:center">Qtd.</span>
+            <span style="left:343pt;width:42pt;text-align:center">Taxa/IVA</span>
+            <span style="left:388pt;width:35pt;text-align:center">Desc.</span>
+            <span style="left:430pt;width:70pt;text-align:right">Total</span>
           </div>
 
-          <div class="sum-row mt-1">
-            <span class="small">Bens e serviços:</span>
-            <span class="small" style="margin-left: -90px; width: 250px !important;">Os bens e serviços foram colocados à disposição do adquirente na data do documento.</span>
-          </div>
-
-          <div class="sum-row mt-2">
-            <span class="small">Dados bancários:</span>
-            <span
-              class="small"
-              style="margin-left: -90px; width: 250px !important;"
-              id="ibanNumber">
-              <?php
-              $iban = preg_replace('/[.\s]/', '', $inv["iban"]);
-
-              $prefix = substr($iban, 0, 4);
-              $rest = substr($iban, 4);
-
-              $formatted = trim(chunk_split($rest, 4, ' '));
-
-              echo $prefix . ' ' . $formatted;
-              ?>
-            </span>
-          </div>
-
-          <!-- barra inferior grossa -->
-          <div class="mt-1" style="border-bottom: 1.5px solid #8b8b8b !important;"></div>
-
-          <!-- …antes do separador grosso -->
-          <!-- <?php if ($paid_total > 0): ?>
-            <div class="sum-row">
-              <span>Pago:</span>
-              <span class="right">
-                <?= formatCurrency($paid_total, $inv['moneySymbol'], $inv['moneyPos']) ?>
-              </span>
-            </div>
-
-            <?php if ($saldo > 0): // só mostra saldo se ainda houver 
-            ?>
-              <div class="sum-row">
-                <span>Saldo:</span>
-                <span class="right">
-                  <?= formatCurrency($saldo, $inv['moneySymbol'], $inv['moneyPos']) ?>
-                </span>
+          <div class="t-body<?= $isLast ? '' : ' has-carry' ?>">
+            <?php foreach ($pageItems as $it):
+              $base = (float)$it['unit_price'] * (float)$it['quantity'];
+              $discount = $base * ((float)$it['discount'] / 100);
+              $total = $base - $discount + (($base - $discount) * ((float)$it['tax'] / 100)); ?>
+              <div class="irow">
+                <span class="c c-code"><?= e($it['code']) ?></span>
+                <div class="desc"><?= e(itemLabel($it)) ?></div>
+                <span class="c c-price"><?= e($money($it['unit_price'])) ?></span>
+                <span class="c c-qty"><?= e($it['quantity']) ?></span>
+                <span class="c c-tax"><?= e($it['tax']) ?>%</span>
+                <span class="c c-disc"><?= e($it['discount']) ?>%</span>
+                <span class="c c-total"><?= e($money($total)) ?></span>
               </div>
+            <?php endforeach; ?>
+
+            <?php if (!$isLast): ?>
+              <div class="carry">A transportar…</div>
             <?php endif; ?>
-          <?php endif; ?> -->
-
-        </div>
-
-      </div><!-- /.sum-grid -->
-
-      <!-- ===== DIREITA – Sumário ===== -->
-      <div style="width: 270px !important;">
-        <?php $totalPagar = (float)$inv['final_total']; ?>
-        <div class="sum-head tag-title small" style="opacity: .6;">Sumário</div>
-
-        <div class="lh-1">
-
-          <div class="sum-row mt-1">
-            <span class="small">Total ílíquido:</span>
-            <span class="right small"> <?= formatCurrency($inv['total_sum'], $inv['moneySymbol'], $inv['moneyPos']) ?>
-            </span>
           </div>
 
-          <div class="sum-row">
-            <span class="small">Desconto:</span>
-            <span class="right small"><?= formatCurrency($inv['total_discount'], $inv['moneySymbol'], $inv['moneyPos']) ?></span>
+          <!-- DADOS FISCAIS E SUMÁRIO (em todas as páginas) -->
+          <div class="totals">
+            <div class="t title" style="left:0">Dados fiscais e bancários</div>
+            <div class="t title" style="left:320pt">Sumário</div>
+            <div class="hline" style="left:0;width:295pt"></div>
+            <div class="hline" style="left:320pt;width:185pt"></div>
+
+            <!-- esquerda -->
+            <div class="t" style="left:0;top:34pt">Regime de IVA:</div>
+            <div class="t lv" style="top:34pt"><?= e($vatRegime) ?></div>
+
+            <div class="t" style="left:0;top:54pt">Bens e serviços:</div>
+            <div class="t lv" style="top:54pt;width:180pt">Os bens e serviços foram colocados à disposição<br>do adquirente na data do documento.</div>
+
+            <div class="t" style="left:0;top:96pt">Dados bancários:</div>
+            <div class="t lv" style="top:96pt"><?= e($iban) ?></div>
+
+            <!-- direita -->
+            <div class="t rl" style="top:32pt">Total líquido:</div>
+            <div class="t rv" style="top:32pt"><?= e($money($inv['total_sum'])) ?></div>
+
+            <div class="t rl" style="top:48pt">Desconto:</div>
+            <div class="t rv" style="top:48pt"><?= e($money($inv['total_discount'])) ?></div>
+
+            <div class="t rl" style="top:62pt">Sem Imposto/IVA c.Desc.:</div>
+            <div class="t rv" style="top:62pt"><?= e($money($inv['total_sum'] - $inv['total_discount'])) ?></div>
+
+            <div class="t rl" style="top:76pt">Imposto/IVA:</div>
+            <div class="t rv" style="top:76pt"><?= e($money($inv['total_tax'])) ?></div>
+
+            <div class="t rl" style="top:90pt">Retenção:</div>
+            <div class="t rv" style="top:90pt"><?= e($money($inv['retention_value'])) ?></div>
+
+            <div class="sep1"></div>
+            <div class="final rl">Total:</div>
+            <div class="final" style="left:395pt;width:110pt;text-align:right"><?= e($money($inv['final_total'])) ?></div>
+            <div class="sep2"></div>
           </div>
 
-          <div class="sum-row">
-            <span class="small">Sem Imposto/IVA c Desc.:</span>
-            <span class="right small">
-              <?= formatCurrency($inv['total_sum'] - $inv['total_discount'], $inv['moneySymbol'], $inv['moneyPos']) ?>
-            </span>
-          </div>
+        </div><!-- /.flow -->
 
-          <div class="sum-row">
-            <span class="small">Imposto/IVA:</span>
-            <span class="right small"><?= formatCurrency($inv['total_tax'], $inv['moneySymbol'], $inv['moneyPos']) ?></span>
-          </div>
+        <!-- RODAPÉ (em todas as páginas) -->
+        <img class="qr" src="<?= $qrSrc ?>" alt="QR">
+        <div class="agt">Factura processada pelo software certificado pela AGT | Nº <?= e(AGT_CERTIFICATE) ?></div>
+        <div class="pg"><?= $pageIndex + 1 ?>/<?= $pageCount ?></div>
 
-          <div class="sum-row">
-            <span class="small">Retenção:</span>
-            <span class="right small"><?= formatCurrency($inv['retention_value'], $inv['moneySymbol'], $inv['moneyPos']) ?></span>
-          </div>
+      </section>
 
-          <!-- separador grosso -->
-          <div class="mt-1" style="border-bottom: 2.5px solid #8b8b8b !important;"></div>
-
-          <div class="sum-row bold mt-1 tag-title">
-            <span class="fs-6">Total:</span>
-            <span class="right fs-6">
-              <?= formatCurrency($totalPagar, $inv['moneySymbol'], $inv['moneyPos']) ?>
-            </span>
-          </div>
-          <!-- <div class="sum-row" style="margin-top:2px;">
-            <span style="grid-column:1 / -1; font-size:.72rem;">
-              <?= htmlspecialchars(moneyToWords($totalPagar, $inv['currency'] ?? 'AOA')) ?>
-            </span>
-          </div> -->
-
-          <!-- barra inferior grossa -->
-          <div class="sum-bottom mt-1" style="border-bottom: 2.5px solid #8b8b8b !important;"></div>
-
-          <!-- …antes do separador grosso -->
-          <!-- <?php if ($paid_total > 0): ?>
-            <div class="sum-row">
-              <span>Pago:</span>
-              <span class="right">
-                <?= formatCurrency($paid_total, $inv['moneySymbol'], $inv['moneyPos']) ?>
-              </span>
-            </div>
-
-            <?php if ($saldo > 0): // só mostra saldo se ainda houver 
-            ?>
-              <div class="sum-row">
-                <span>Saldo:</span>
-                <span class="right">
-                  <?= formatCurrency($saldo, $inv['moneySymbol'], $inv['moneyPos']) ?>
-                </span>
-              </div>
-            <?php endif; ?>
-          <?php endif; ?> -->
-
-        </div>
-
-      </div><!-- /.sum-grid -->
-
-    </div><!-- /.totals-wrap -->
-
-    <!-- ===== REGIME IVA / BENS E SERVIÇOS / DADOS BANCÁRIOS ===== -->
-
-
-    <!-- ===== RODAPÉ (dados da empresa emissora) ===== -->
-    <footer class="inv-footer">
-      <div class="d-flex justify-content-between align-items-end inv-footer"
-        style="font-size: 8pt; margin-top: 350px !important; border-bottom: 1px solid none; padding-bottom: 8px;">
-
-        <!-- ESQUERDA: DADOS BANCÁRIOS -->
-
-        <div class="d-flex gap-3"></div>
-
-
-        <!-- DIREITA: QR CODE -->
-        <div id="invoice-qr">
-          <img src="<?= $qrSrc ?>"
-            alt="QR"
-            style="width:75px;height:75px;">
-        </div>
-
-      </div>
-
-      <div class="inv-footer" style="font-size: 8pt; margin-top: -4px; border: 0px solid none !important;">
-        <span id="address" class="opacity-50">Powered By BXpert</span>
-      </div>
-      <br><br>
-    </footer>
-
-    <!-- numeração de página no PDF (Dompdf) -->
-    <script type="text/php">
-      if (isset($pdf)) {
-      $font = $fontMetrics->get_font("Helvetica", "normal");
-      $pdf->page_text(520, 820, "{PAGE_NUM} / {PAGE_COUNT}", $font, 8, array(0,0,0));
-    }
-  </script>
-
-  </main>
+    <?php endforeach; ?>
+  <?php endforeach; ?>
 </body>
-
-<script>
-  (() => {
-    // =========================
-    // MÁSCARA CARTÃO DE CRÉDITO
-    // =========================
-
-    // =========================
-    // FORMATAÇÃO IBAN ANGOLA
-    // AO06.0006.0000.1234.5678.9012.1
-    // =========================
-
-    const ibanElement = document.getElementById("ibanNumber");
-
-    if (!ibanElement) return;
-
-    let value = ibanElement.textContent.trim();
-
-
-    // remove espaços e pontos
-    value = value.replace(/[.\s]/g, "");
-
-    // separa prefixo AO06
-    const prefix = value.substring(0, 4);
-    const rest = value.substring(4);
-
-    // agrupa em blocos de 4
-    const formatted = rest.match(/.{1,4}/g)?.join(".") || "";
-
-    // resultado final
-    ibanElement.textContent = `${prefix}.${formatted}`;
-  })();
-</script>
 
 </html>
