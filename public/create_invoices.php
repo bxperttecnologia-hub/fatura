@@ -1371,4 +1371,5 @@ $retentionRate = 6.5; // % aplicada pela caixa "Aplicar Retenção na Fonte"
     setTimeout(fetchCompany, 100);
 </script>
 
-<script src="create_invoices/create_invoices.js?v=2.1"></script>
+<!-- v=2.2: nova versão para o navegador não usar o JS antigo em cache -->
+<script src="create_invoices/create_invoices.js?v=2.3"></script>

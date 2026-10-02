@@ -1,5 +1,75 @@
 $(document).ready(function () {
-  const vat_regime = JSON.parse(localStorage.getItem("vat_regime"));
+  // =====================================================================
+  // HELPERS DE IVA / REGIME
+  // O regime é lido SEMPRE no momento do cálculo (nunca uma só vez no
+  // arranque), aceita texto simples ou JSON, e ignora acentos/maiúsculas.
+  // =====================================================================
+  function getVatRegime() {
+    let raw = sessionStorage.getItem("vat_regime");
+    if (raw === null || raw === "") return "";
+
+    try {
+      const parsed = JSON.parse(raw);
+      raw =
+        parsed && typeof parsed === "object"
+          ? parsed.regime || parsed.name || parsed.value || ""
+          : parsed;
+    } catch (e) {
+      /* estava gravado como texto simples: usa tal como está */
+    }
+
+    return String(raw ?? "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "") // remove acentos
+      .replace(/["']/g, "")
+      .trim()
+      .toLowerCase();
+  }
+
+  function isRegimeGeral() {
+    const regime = getVatRegime();
+    if (!regime) {
+      console.warn(
+        "vat_regime ausente no sessionStorage; a assumir regime geral.",
+      );
+      return true; // mude para false se preferir IVA 0 quando o regime não existe
+    }
+    return regime.includes("geral");
+  }
+
+  function toNum(value) {
+    return (
+      parseFloat(
+        String(value ?? "0")
+          .replace("%", "")
+          .replace(",", ".")
+          .trim(),
+      ) || 0
+    );
+  }
+
+  // O nome do campo da taxa varia consoante o endpoint
+  function getItemTaxRate(item) {
+    return toNum(
+      item?.tax ??
+        item?.tax_rate ??
+        item?.tax_percentage ??
+        item?.iva ??
+        item?.vat_rate ??
+        item?.vat ??
+        0,
+    );
+  }
+
+  // Convenção do sistema: taxa 7 = Isento = 0%
+  function effectiveRate(rate) {
+    return rate === 7 ? 0 : rate;
+  }
+
+  // Catálogo em memória (id -> item completo). Evita serializar o item
+  // em data-item='...', que quebrava com apóstrofos na descrição.
+  const catalogItems = {};
+
   const company_id = document.querySelector("input[id=company_id]").value;
 
   let countryMap = {};
@@ -607,13 +677,21 @@ $(document).ready(function () {
       success: function (data) {
         let options =
           '<option value="">Selecione um produto/serviço...</option>';
-        $.each(data?.data, function (index, item) {
-          options += `<option value="${item.id}" data-item='${JSON.stringify(
-            item,
-          )}'>
-            ${item.item_type !== "service" ? `<b><i class="bi bi-box"></i> ${item.code}</b> -` : "<b><i class='bi bi-gear'></i></b>"} ${item.description || item.name}
+
+        $.each(data?.data || [], function (index, item) {
+          // guarda o item completo em memória (id -> item)
+          catalogItems[item.id] = item;
+
+          const label =
+            item.item_type !== "service"
+              ? `<b><i class="bi bi-box"></i> ${escapeAttr(item.code)}</b> -`
+              : "<b><i class='bi bi-gear'></i></b>";
+
+          options += `<option value="${escapeAttr(item.id)}">
+            ${label} ${escapeAttr(item.description || item.name)}
             </option>`;
         });
+
         $("#item_select").html(options);
         $(".select2").select2({ width: "100%", dropdownParent: $("#invPage") });
       },
@@ -718,28 +796,22 @@ $(document).ready(function () {
   }
 
   function calculateRowTotal(row) {
-    let price = parseFloat(row.find(".field_price").val()) || 0;
-    let qtd = parseFloat(row.find(".field_qtd").val()) || 0;
-    let discount = parseFloat(row.find(".field_desc").val()) || 0;
-    let tax = parseFloat(row.find(".field_tax").val()) || 0;
+    let price = toNum(row.find(".field_price").val());
+    let qtd = toNum(row.find(".field_qtd").val());
+    let discount = toNum(row.find(".field_desc").val());
+    let tax = toNum(row.find(".field_tax").val());
 
     // =====================================
     // SUBTOTAL
     // =====================================
-
     let subtotal = price * qtd;
 
     // =====================================
-    // IVA
+    // IVA (só no regime geral; taxa 7 = isento = 0%)
     // =====================================
-
-    let taxValue = 0;
-
-    if (vat_regime === "geral") {
-      taxValue = (subtotal * tax) / 100;
-    } else {
-      taxValue = 0.0;
-    }
+    const taxValue = isRegimeGeral()
+      ? (subtotal * effectiveRate(tax)) / 100
+      : 0;
 
     // total com IVA
     let totalWithTax = subtotal + taxValue;
@@ -747,13 +819,11 @@ $(document).ready(function () {
     // =====================================
     // DESCONTO (%)
     // =====================================
-
     let totalDiscount = (discount / 100) * totalWithTax;
 
     // =====================================
     // TOTAL FINAL
     // =====================================
-
     let totalFinal = totalWithTax - totalDiscount;
 
     row
@@ -786,12 +856,12 @@ $(document).ready(function () {
     );
   }
 
-  // Adicionar item ao selecionar
+  // Adicionar item ao selecionar (usa o catálogo em memória)
   $("#item_select").on("change", function () {
-    var selected = $(this).find(":selected").data("item");
+    const selected = catalogItems[$(this).val()];
     if (selected) {
       addItemRow(selected);
-      $(this).val("").trigger("change"); // Opcional: limpar seleção
+      $(this).val("").trigger("change"); // limpar seleção
     }
   });
 
@@ -810,15 +880,9 @@ $(document).ready(function () {
     const code = item?.code || item?.codigo || "";
     const retention = item?.retention || 0;
 
-    // IVA
-    const itemTax = Number(item?.tax ?? 0);
-    const taxValue = String(vat_regime).toLowerCase() === "geral" ? itemTax : 0;
-
-    console.log({
-      vat_regime,
-      itemTax,
-      taxValue,
-    });
+    // IVA: taxa do produto, só aplicada no regime geral
+    const itemTax = getItemTaxRate(item);
+    const taxValue = isRegimeGeral() ? itemTax : 0;
 
     // Serviço ou Produto
     const isService =
@@ -1077,19 +1141,12 @@ $(document).ready(function () {
     itemList.forEach((row) => {
       const $row = $(row);
 
-      const toNumber = (value) =>
-        parseFloat(
-          String(value || "0")
-            .replace(",", ".")
-            .replace("%", "")
-            .trim(),
-        ) || 0;
-
-      const price = toNumber($row.find(".field_price").val());
-      const qtd = toNumber($row.find(".field_qtd").val());
-      const discountPercent = toNumber($row.find(".field_desc").val());
-      const taxNum = toNumber($row.find(".field_tax").val());
-      const retentionRate = toNumber($row.find(".field_retention").val());
+      const price = toNum($row.find(".field_price").val());
+      const qtd = toNum($row.find(".field_qtd").val());
+      const discountPercent = toNum($row.find(".field_desc").val());
+      // Regime não geral => IVA 0, independentemente da taxa do produto
+      const taxNum = isRegimeGeral() ? toNum($row.find(".field_tax").val()) : 0;
+      const retentionRate = toNum($row.find(".field_retention").val());
 
       const lineTotal = price * qtd;
 
@@ -1105,7 +1162,7 @@ $(document).ready(function () {
       // IVA
       // Regra: taxa 7 = Isento = IVA 0%
       // ==================================================
-      const effectiveTaxRate = taxNum === 7 ? 0 : taxNum;
+      const effectiveTaxRate = effectiveRate(taxNum);
       const ivaValue = (lineSubtotal * effectiveTaxRate) / 100;
 
       // ==================================================
@@ -1135,7 +1192,7 @@ $(document).ready(function () {
       // AGRUPAMENTO
       // Mostra 0% quando a taxa original é 7
       // ==================================================
-      const groupTax = taxNum === 7 ? 0 : taxNum;
+      const groupTax = effectiveRate(taxNum);
 
       if (!grouped[groupTax]) {
         grouped[groupTax] = {
@@ -1278,8 +1335,6 @@ $(document).ready(function () {
       formatCurrency(final, currencySymbol, currencyPosition),
     );
 
-    // $("#final_totalInput").val(final.toFixed(2));
-
     updateConvertedTotal?.();
   }
 
@@ -1351,18 +1406,6 @@ $(document).ready(function () {
 
     fetchExchangeRate(userCurrency, selectedCurrency);
     updateExchangeRateText();
-  });
-
-  $("#manual_exchange_rate").on("input", function () {
-    exchangeRate = parseFloat($(this).val()) || 1;
-    updateConvertedTotal();
-  });
-
-  $("#currency").on("change", function () {
-    let selectedCurrency = $(this).val();
-    $("#selected_currency").text(selectedCurrency);
-
-    fetchExchangeRate(userCurrency, selectedCurrency);
   });
 
   $("#manual_exchange_rate").on("input", function () {
@@ -1467,7 +1510,7 @@ $(document).ready(function () {
       .catch((error) => {
         console.error("❌ Erro ao carregar cidades:", error);
         citySelect
-          .html('<option value="">Erro ao carregar</do not get translated>')
+          .html('<option value="">Erro ao carregar</option>')
           .trigger("change");
       });
   }
@@ -1592,11 +1635,12 @@ $(document).ready(function () {
     $("#items_list .item-list").each(function () {
       items.push({
         id: $(this).attr("id").replace("item-", ""),
-        code: parseFloat($(this).find(".field_code").val()) || 1,
-        quantity: parseFloat($(this).find(".field_qtd").val()) || 1,
-        unit_price: parseFloat($(this).find(".field_price").val()) || 0,
-        discount: parseFloat($(this).find(".field_desc").val()) || 0,
-        tax: parseFloat($(this).find(".field_tax").val()) || 0,
+        // código como texto (SERV001, etc.); antes virava número e perdia-se
+        code: $(this).find(".field_code").val() || "",
+        quantity: toNum($(this).find(".field_qtd").val()) || 1,
+        unit_price: toNum($(this).find(".field_price").val()),
+        discount: toNum($(this).find(".field_desc").val()),
+        tax: toNum($(this).find(".field_tax").val()),
       });
     });
 
