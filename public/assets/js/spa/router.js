@@ -13,10 +13,6 @@
 const BXpertRouter = (function () {
   'use strict';
 
-  // ════════════════════════════════════════════════════════════════
-  // CONFIG
-  // ════════════════════════════════════════════════════════════════
-
   const config = {
     mainSelector: '#app-main',
     loadingBarSelector: '#spa-loading-bar',
@@ -50,10 +46,6 @@ const BXpertRouter = (function () {
     '/intelligence': { view: 'intelligence.php', name: 'intelligence' }
   };
 
-  // ════════════════════════════════════════════════════════════════
-  // STATE
-  // ════════════════════════════════════════════════════════════════
-
   let currentPath = null;
   let isNavigating = false;
   let abortController = null;
@@ -72,33 +64,52 @@ const BXpertRouter = (function () {
     return pathname.replace(/\/+$/, '') || '/';
   }
 
+  function stripBaseFromPath(path) {
+    const base = getBasePath();
+    if (base && base !== '/' && path.startsWith(base)) {
+      return path.slice(base.length) || '/';
+    }
+    return path;
+  }
+
   function routeKeyFromPath(path) {
     const raw = String(path || '/');
     const withoutHash = raw.split('#')[0];
     const withoutQuery = withoutHash.split('?')[0];
-    const base = getBasePath();
-    const stripped = withoutQuery.startsWith(base)
-      ? withoutQuery.slice(base.length) || '/'
-      : withoutQuery;
 
-    const normalized = stripped.startsWith('/') ? stripped : `/${stripped}`;
-    return normalized === '' ? '/' : normalized.replace(/\/+$/, '') || '/';
+    let normalized = withoutQuery;
+
+    if (/^https?:\/\//i.test(normalized)) {
+      normalized = new URL(normalized, window.location.href).pathname;
+    }
+
+    normalized = stripBaseFromPath(normalized);
+
+    if (/\/index\.php$/i.test(normalized)) {
+      normalized = '/';
+    } else if (/\.php$/i.test(normalized)) {
+      const phpMatch = normalized.match(/^(.*)\.php$/i);
+      normalized = phpMatch ? phpMatch[1] : normalized;
+    }
+
+    if (!normalized.startsWith('/')) {
+      normalized = `/${normalized}`;
+    }
+
+    normalized = normalized.replace(/\/+$|\\+$/g, '');
+    return normalized || '/';
   }
 
   function browserPathFromRoute(path) {
     const key = routeKeyFromPath(path);
     const base = getBasePath();
 
-    if (base === '/' || base === '') {
-      return key;
+    if (base && base !== '/') {
+      return `${base}${key === '/' ? '' : key}`;
     }
 
-    return `${base}${key === '/' ? '' : key}`;
+    return key;
   }
-
-  // ════════════════════════════════════════════════════════════════
-  // DOM UTILITIES
-  // ════════════════════════════════════════════════════════════════
 
   function getMainEl() {
     return document.querySelector(config.mainSelector);
@@ -128,10 +139,6 @@ const BXpertRouter = (function () {
     }, 400);
   }
 
-  // ════════════════════════════════════════════════════════════════
-  // ROUTE MATCHING
-  // ════════════════════════════════════════════════════════════════
-
   function matchRoute(path) {
     const routeKey = routeKeyFromPath(path);
 
@@ -146,10 +153,6 @@ const BXpertRouter = (function () {
 
     return routes['/'];
   }
-
-  // ════════════════════════════════════════════════════════════════
-  // LOAD VIEW
-  // ════════════════════════════════════════════════════════════════
 
   async function loadView(path) {
     const route = matchRoute(path);
@@ -194,19 +197,11 @@ const BXpertRouter = (function () {
     }
   }
 
-  // ════════════════════════════════════════════════════════════════
-  // RENDER VIEW
-  // ════════════════════════════════════════════════════════════════
-
   function renderView(html) {
     const main = getMainEl();
     if (!main) return;
     main.innerHTML = html;
   }
-
-  // ════════════════════════════════════════════════════════════════
-  // EXECUTE SCRIPTS
-  // ════════════════════════════════════════════════════════════════
 
   function executeScripts(container) {
     const scripts = container.querySelectorAll('script');
@@ -222,10 +217,6 @@ const BXpertRouter = (function () {
       oldScript.parentNode.replaceChild(newScript, oldScript);
     });
   }
-
-  // ════════════════════════════════════════════════════════════════
-  // INITIALIZE PAGE
-  // ════════════════════════════════════════════════════════════════
 
   function initializePage(path) {
     const main = getMainEl();
@@ -247,14 +238,9 @@ const BXpertRouter = (function () {
     }
 
     highlightActiveLink();
-
     window.scrollTo(0, 0);
     main.scrollTo?.(0, 0);
   }
-
-  // ════════════════════════════════════════════════════════════════
-  // HIGHLIGHT ACTIVE LINK
-  // ════════════════════════════════════════════════════════════════
 
   function highlightActiveLink() {
     const sidebar = document.querySelector(config.sidebarSelector);
@@ -270,10 +256,6 @@ const BXpertRouter = (function () {
       link.classList.toggle('active', isActive);
     });
   }
-
-  // ════════════════════════════════════════════════════════════════
-  // ERROR HANDLERS
-  // ════════════════════════════════════════════════════════════════
 
   function showError(error) {
     const main = getMainEl();
@@ -298,10 +280,6 @@ const BXpertRouter = (function () {
     alert('Sua sessão expirou. Será redirecionado para a página de login.');
     window.location.href = 'login.php';
   }
-
-  // ════════════════════════════════════════════════════════════════
-  // NAVIGATE
-  // ════════════════════════════════════════════════════════════════
 
   async function navigate(path, pushState = true) {
     const routeKey = routeKeyFromPath(path);
@@ -330,10 +308,6 @@ const BXpertRouter = (function () {
     }
   }
 
-  // ════════════════════════════════════════════════════════════════
-  // LINK INTERCEPTOR
-  // ════════════════════════════════════════════════════════════════
-
   function bindLinks() {
     document.addEventListener('click', (event) => {
       const link = event.target.closest(config.linkSelector);
@@ -357,20 +331,12 @@ const BXpertRouter = (function () {
     });
   }
 
-  // ════════════════════════════════════════════════════════════════
-  // HISTORY NAVIGATION (BACK/FORWARD)
-  // ════════════════════════════════════════════════════════════════
-
   function bindHistory() {
     window.addEventListener('popstate', () => {
       const path = routeKeyFromPath(window.location.pathname);
       navigate(path, false);
     });
   }
-
-  // ════════════════════════════════════════════════════════════════
-  // PUBLIC API
-  // ════════════════════════════════════════════════════════════════
 
   function init() {
     bindLinks();
@@ -387,10 +353,6 @@ const BXpertRouter = (function () {
   };
 
 })();
-
-// ════════════════════════════════════════════════════════════════
-// INITIALIZATION ON DOCUMENT READY
-// ════════════════════════════════════════════════════════════════
 
 document.addEventListener('DOMContentLoaded', () => {
   BXpertRouter.init();
