@@ -363,7 +363,7 @@
     <div class="nav-section">
         <br>
 
-        <a href="index.php" class="nav-item" data-link data-tooltip="Painel de controle">
+        <a href="/" class="nav-item" data-spa data-tooltip="Painel de controle">
             <span><i data-lucide="layout-dashboard" class="nav-icon"></i> <span>Painel de controle</span></span>
         </a>
 
@@ -374,8 +374,8 @@
             <i class="text-white menu-link-icon" data-lucide="chevron-down"></i>
         </button>
         <div class="submenu" id="clientes">
-            <a href="register_contact.php" data-link><i data-lucide="plus"></i> Adicionar Cliente/Empresa</a>
-            <a href="contacts.php" data-link><i data-lucide="list"></i> Lista de Clientes/Empresas</a>
+            <a href="/contacts/create" data-spa><i data-lucide="plus"></i> Adicionar Cliente/Empresa</a>
+            <a href="/contacts" data-spa><i data-lucide="list"></i> Lista de Clientes/Empresas</a>
         </div>
 
         <button class="nav-item" data-submenu="#produtos" data-tooltip="Produtos/Serviços">
@@ -387,7 +387,7 @@
             <a href="items.php" data-drawer-open="create">
                 <i class="text-white" data-lucide="plus"></i> Adicionar
             </a>
-            <a href="items.php" data-link> <i data-lucide="list"></i> Meus Itens </a>
+            <a href="/items" data-spa> <i data-lucide="list"></i> Meus Itens </a>
         </div>
 
         <div class="section-title">Operações</div>
@@ -404,8 +404,8 @@
                 <i class="text-white menu-link-icon" data-lucide="chevron-down"></i>
             </button>
             <div class="submenu" id="proformas">
-                <a href="create_proform.php" data-link><i data-lucide="plus"></i> Emitir</a>
-                <a href="list_proforms.php" data-link><i data-lucide="list"></i> Listar</a>
+                <a href="/proformas/create" data-spa><i data-lucide="plus"></i> Emitir</a>
+                <a href="/proformas" data-spa><i data-lucide="list"></i> Listar</a>
             </div>
 
             <button class="nav-item" data-submenu="#facturas">
@@ -413,8 +413,8 @@
                 <i class="text-white menu-link-icon" data-lucide="chevron-down"></i>
             </button>
             <div class="submenu" id="facturas">
-                <a href="create_invoices.php" data-link><i data-lucide="plus"></i> Emitir</a>
-                <a href="list_invoices.php" data-link><i data-lucide="list"></i> Listar</a>
+                <a href="/invoices/create" data-spa><i data-lucide="plus"></i> Emitir</a>
+                <a href="/invoices" data-spa><i data-lucide="list"></i> Listar</a>
             </div>
 
         </div>
@@ -424,8 +424,8 @@
             <i class="text-white menu-link-icon" data-lucide="chevron-down"></i>
         </button>
         <div class="submenu d-none" id="stock">
-            <a href="stock.php" data-link><i data-lucide="database"></i> Inventário</a>
-            <a href="purchases.php" data-link><i data-lucide="shopping-cart"></i> Compras</a>
+            <a href="/stock" data-spa><i data-lucide="database"></i> Inventário</a>
+            <a href="purchases.php"><i data-lucide="shopping-cart"></i> Compras</a>
         </div>
 
         <button class="nav-item submenu-rh" data-submenu="#rh" data-tooltip="Recursos Humanos">
@@ -433,19 +433,19 @@
             <i class="text-white menu-link-icon" data-lucide="chevron-down"></i>
         </button>
         <div class="submenu submenu-rh" id="rh">
-            <a href="departments.php" data-link><i data-lucide="building-2"></i> Departamentos</a>
-            <a href="employees.php" data-link><i data-lucide="users"></i> Funcionários</a>
-            <a href="ponto.php" data-link><i data-lucide="clock"></i> Registro de Pontos</a>
-            <a href="vacations.php" data-link><i data-lucide="calendar"></i> Férias / Licenças</a>
-            <a href="positions.php" data-link><i data-lucide="briefcase"></i> Cargos / Salários</a>
-            <a href="payroll.php" data-link><i data-lucide="file-text"></i> Folha de Pagamento</a>
+            <a href="departments.php"><i data-lucide="building-2"></i> Departamentos</a>
+            <a href="/employees" data-spa><i data-lucide="users"></i> Funcionários</a>
+            <a href="/ponto" data-spa><i data-lucide="clock"></i> Registro de Pontos</a>
+            <a href="/vacations" data-spa><i data-lucide="calendar"></i> Férias / Licenças</a>
+            <a href="/positions" data-spa><i data-lucide="briefcase"></i> Cargos / Salários</a>
+            <a href="/payroll" data-spa><i data-lucide="file-text"></i> Folha de Pagamento</a>
         </div>
 
     </div>
 
     <div class="footer">
 
-        <a href="list_companies.php" class="nav-item" data-tooltip="Definições">
+        <a href="/subscription" class="nav-item" data-spa data-tooltip="Definições">
             <span><i data-lucide="settings"></i> <span>Definições</span></span>
         </a>
 
@@ -460,7 +460,7 @@
                         <h5 class="mb-1 fw-bolder text-white" style="font-size: 12pt;">Plano &nbsp;</h5>
                         <div id="subInfo" class="text-white" style="font-size:0.85rem;">Carregando...</div>
                     </div>
-                    <a href="subscription.php" class="btn bg-light text-dark w-100 d-flex align-items-center justify-content-center gap-2 py-2">
+                    <a href="/subscription" class="btn bg-light text-dark w-100 d-flex align-items-center justify-content-center gap-2 py-2" data-spa>
                         Renovar
                         <i class="bi bi-arrow-up-right"></i>
                     </a>
