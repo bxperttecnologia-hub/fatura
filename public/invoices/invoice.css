@@ -1,13 +1,12 @@
 /*  Ajustes pontuais só deste documento  */
 .invoice-page {
-  /* border: 1px solid #cecece; */
   background: #fff !important;
-  padding: 1.2rem;
-  font-size: 0.8rem !important;
-  /* Evite reservar um rodapé "fixo" com padding grande: isso causa páginas com muito branco no Dompdf */
+  padding: 1.4rem 1.25rem 0;
+  font-size: 0.82rem !important;
   padding-bottom: 0;
-  color: #8a7d7d !important;
+  color: #1f2937 !important;
   font-weight: 400 !important;
+  line-height: 1.45;
 }
 
 /* —— Header geral —— */
@@ -80,6 +79,9 @@
   font-weight: 700;
   border-bottom: 2.5px solid #8b8b8b !important;
   padding: 0px 0px 10px 0px;
+  font-size: 1.05rem;
+  letter-spacing: .01em;
+  color: #111827 !important;
 }
 
 /* ------ contêiner das duas colunas ------ */
@@ -134,18 +136,18 @@
 
 /* ===== grade de itens ===== */
 .items-grid {
-  /* faixa grossa no topo */
   border-top: 2px solid #000;
   font-size: 0.8rem;
   width: 100%;
+  margin-top: .25rem;
 }
 
-/* cada linha vira um grid de 7 colunas */
 .items-row {
   display: grid;
-  /* aumenta espaço da descrição reduzindo colunas numéricas */
   grid-template-columns: 50px 1fr 95px 55px 75px 65px 105px;
-  padding: 2px 4px;
+  padding: 0.45rem 0.35rem;
+  align-items: center;
+  line-height: 1.35;
 }
 
 /* descrição sem negrito e um pouco menor */
@@ -158,8 +160,12 @@
 /* cabeçalho */
 .items-head {
   font-weight: 700;
-  border-bottom: 1px solid #000; /* linha fina abaixo do cabeçalho */
+  border-bottom: 1px solid #000;
   text-align: center;
+  font-size: .74rem;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  color: #111827;
 }
 
 /* alinha somente algumas colunas nas linhas de dados */
@@ -205,17 +211,21 @@
   font-weight: 700;
   border-bottom: 0.5px solid #000 !important;
   padding: 2px 0 3px;
+  color: #111827;
 }
 .sum-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  padding: 1px 0;
+  padding: 2px 0;
+  font-size: .78rem;
 }
 .sum-row span.right {
   text-align: right;
 }
 .sum-row.bold {
   font-weight: 700;
+  color: #111827;
+  font-size: .84rem;
 }
 
 /* linha dupla grossa usada duas vezes */

@@ -1,13 +1,175 @@
+/**
+ * Registo / edição de cliente, dentro do modal #contactFormModal (contacts.php).
+ *
+ * API pública:
+ *   window.openContactForm()      -> abre o modal para um cliente NOVO
+ *   window.openContactForm(id)    -> abre o modal para EDITAR o cliente `id`
+ *
+ * Evento (disparado em `document` depois de gravar com sucesso):
+ *   "contact:saved"  com  { mode: "create" | "update", id }
+ *   -> contacts.js escuta este evento e atualiza a lista, sem recarregar a página.
+ *
+ * Links antigos (register_contact.php) redirecionam para contacts.php?new=1
+ * ou contacts.php?edit=ID, que abrem o modal automaticamente (ver fim do ficheiro).
+ */
 $(document).ready(function () {
-  let countryMap = {};
-  let contactId = null; // Variável global para armazenar o ID do contato
+  const modalEl = document.getElementById("contactFormModal");
+  if (!modalEl) return; // esta página não tem o modal de cliente
 
-  function getQueryParam(param) {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get(param);
+  const contactModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+  const $form = $("#contactForm");
+
+  let countryMap = {};
+  let contactId = null; // null = cliente novo; número = a editar esse cliente
+  let loadToken = 0; // ignora respostas antigas se o utilizador abrir outro cliente
+  let isSaving = false; // evita gravar duas vezes com duplo clique
+
+  // Estado da consulta de NIF (declarado aqui em cima porque resetForm() o usa)
+  const NIF_REGEX = /^(5\d+|\d{9}[A-Za-z0-9]+)$/;
+  const NIF_CACHE_KEY = "agt_nif_cache_v1";
+  const NIF_CACHE_TTL = 24 * 60 * 60 * 1000; // 24h
+  const NIF_CACHE_MAX = 200;
+  let lastNifChecked = "";
+  let nifRequestId = 0;
+  let nifWaitingForInternet = false;
+
+  const defaultSubtitle = $("#contactFormModalSubtitle").text();
+
+  // =====================================================================
+  // ASSISTENTE DE ETAPAS (antes vivia num <script> inline em register_contact.php)
+  // =====================================================================
+  const steps = modalEl.querySelectorAll(".step-content");
+  const indicators = modalEl.querySelectorAll(".step-progress .step");
+  const bar = document.getElementById("stepBar");
+  const prevBtn = document.getElementById("prevBtn");
+  const nextBtn = document.getElementById("nextBtn");
+  const saveBtn = document.getElementById("saveChangesContact");
+  let current = 0;
+
+  function updateWizard() {
+    const lastStep = steps.length - 1;
+
+    steps.forEach((s, i) => s.classList.toggle("active", i === current));
+    indicators.forEach((s, i) => s.classList.toggle("active", i <= current));
+    bar.style.width = (current / lastStep) * 100 + "%";
+
+    prevBtn.style.display = current === 0 ? "none" : "";
+
+    const isLast = current === lastStep;
+    nextBtn.classList.toggle("d-none", isLast);
+    saveBtn.classList.toggle("d-none", !isLast);
   }
 
-  // ---------- helpers de rede / campos manuais ----------
+  // ---------- validação ----------
+  const PHONE_REGEX = /^[29]\d{8}$/; // 9 dígitos, começa por 2 ou 9
+  const EMAIL_FIELD_NAMES = ["email", "pref_email"];
+
+  function getLabel(field) {
+    const label = field
+      .closest(".col-12, .col-md-6, .mb-3")
+      ?.querySelector("label");
+    return label ? label.innerText : field.name;
+  }
+
+  // Devolve { field, message } com o primeiro erro da etapa, ou null se estiver tudo bem.
+  function findStepError(stepIndex) {
+    const fields = steps[stepIndex].querySelectorAll(
+      "input:not([type=hidden]), select, textarea",
+    );
+    fields.forEach((f) => f.classList.remove("is-invalid"));
+
+    for (const field of fields) {
+      const value = (field.value || "").trim();
+      const isEmailField = EMAIL_FIELD_NAMES.includes(field.name);
+
+      // Email nunca é obrigatório, mesmo que o input tenha o atributo required
+      if (field.required && !value && !isEmailField) {
+        return { field, message: `Preencha o campo: ${getLabel(field)}` };
+      }
+
+      // campos opcionais vazios não são validados
+      if (!value) continue;
+
+      if (field.name === "name" && value.length < 6) {
+        return { field, message: "Nome deve ter no mínimo 6 caracteres." };
+      }
+
+      if (field.name === "contributor") {
+        const nifRegex1 = /^5\d+$/; // começa com 5 e só números
+        const nifRegex2 = /^\d{9}[A-Za-z0-9]+$/; // 9 dígitos + alfanumérico
+        if (!(nifRegex1.test(value) || nifRegex2.test(value))) {
+          return {
+            field,
+            message: "NIF inválido. Ex: 943798589UB049 ou 50000000123214",
+          };
+        }
+      }
+
+      // EMAIL (opcional, mas se preenchido tem de ser válido)
+      if (isEmailField && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+        return { field, message: "Email inválido." };
+      }
+
+      // TELEFONES (9 dígitos, começa por 2 ou 9)
+      if (
+        ["telephone", "pref_telephone", "pref_cellphone"].includes(
+          field.name,
+        ) &&
+        !PHONE_REGEX.test(value)
+      ) {
+        return {
+          field,
+          message: "Telefone inválido. Deve ter 9 dígitos e começar por 2 ou 9.",
+        };
+      }
+    }
+
+    return null;
+  }
+
+  // Vai para a etapa com erro, marca o campo e avisa.
+  function showStepError(stepIndex, error) {
+    current = stepIndex;
+    updateWizard();
+    error.field.classList.add("is-invalid");
+    Swal.fire({ icon: "error", title: "Erro!", text: error.message }).then(
+      () => error.field.focus(),
+    );
+  }
+
+  nextBtn.addEventListener("click", () => {
+    const error = findStepError(current);
+    if (error) return showStepError(current, error);
+
+    if (current < steps.length - 1) {
+      current++;
+      updateWizard();
+    }
+  });
+
+  prevBtn.addEventListener("click", () => {
+    if (current > 0) {
+      current--;
+      updateWizard();
+    }
+  });
+
+  // limpa o destaque de erro ao digitar
+  $form.on("input", "input, textarea, select", function () {
+    this.classList.remove("is-invalid");
+  });
+
+  // Email nunca bloqueia o avanço por causa do atributo required
+  $form
+    .find('input[name="email"], input[name="pref_email"]')
+    .removeAttr("required");
+
+  // Enter nunca deve "submeter" o formulário (a gravação é feita pelo botão Salvar)
+  $form.on("submit", (e) => e.preventDefault());
+
+  // =====================================================================
+  // HELPERS DE REDE / CAMPOS MANUAIS
+  // =====================================================================
   function fetchWithTimeout(url, options = {}, ms = 8000) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), ms);
@@ -72,7 +234,12 @@ $(document).ready(function () {
     this.value = this.value.replace(/\D/g, "").slice(0, 9);
   });
 
+  // ---------- país / cidade (GeoNames) ----------
+  // O formulário atual não tem os campos #country/#city; estas funções só
+  // trabalham se eles existirem (evita uma chamada de rede inútil a cada abertura).
   async function selectCountry(selectedCountry = "", selectedCity = "") {
+    if (!$("#country").length) return false;
+
     const username = "israelsouza";
 
     const countrySelect = $("#country");
@@ -142,6 +309,8 @@ $(document).ready(function () {
   }
 
   async function loadCities(countryName, selectedCity = "") {
+    if (!$("#city").length) return false;
+
     const citySelect = $("#city");
 
     try {
@@ -210,33 +379,119 @@ $(document).ready(function () {
     }
   }
 
-  async function loadContactData(contactId) {
-    if (!contactId) return;
+  $("#country").on("change", function () {
+    if ($(this).data("ignore-change")) return;
+    loadCities($(this).val());
+  });
+
+  // ---------- "usar definições padrão da conta" ----------
+  function toggleFields() {
+    const isChecked = $("#usar_definicoes").prop("checked");
+
+    // Vencimento, idioma e moeda são fixos; observações agora usam o botão de notas.
+    // Selects não podem ser editados, mas ainda serão enviados
+    if (isChecked) {
+      $("#numberCopys, #payment_method")
+        .addClass("blocked-select")
+        .attr("tabindex", "-1");
+    } else {
+      $("#numberCopys, #payment_method")
+        .removeClass("blocked-select")
+        .removeAttr("tabindex");
+    }
+  }
+
+  $("#usar_definicoes").on("change", toggleFields);
+
+  // =====================================================================
+  // ESTADO DO MODAL (novo / editar)
+  // =====================================================================
+  function applyModalMode() {
+    const isEdit = !!contactId;
+
+    $("#contactFormModalTitle").text(
+      modalEl.dataset[isEdit ? "titleEdit" : "titleNew"],
+    );
+    $("#contactFormModalSubtitle").text(
+      isEdit ? "Atualize os dados do cliente" : defaultSubtitle,
+    );
+    saveBtn.textContent = isEdit ? "Salvar alterações" : "Salvar";
+
+    // A consulta de NIF na AGT só faz sentido ao criar
+    $("#btnConsultNif").toggleClass("d-none", isEdit);
+  }
+
+  function setLoading(loading) {
+    saveBtn.disabled = loading;
+    nextBtn.disabled = loading;
+    $(modalEl).find(".modal-body").css("opacity", loading ? 0.5 : 1);
+  }
+
+  // Guarda o valor de cada campo depois de carregar, para na edição
+  // enviarmos só o que mudou (getUpdatedFields).
+  function snapshotOriginals() {
+    $form.find("input, select, textarea").each(function () {
+      $(this).data("original", $(this).val());
+    });
+  }
+
+  function getUpdatedFields() {
+    const updatedData = {};
+    $form.find("input, select, textarea").each(function () {
+      const fieldName = $(this).attr("name");
+      if (fieldName && $(this).val() !== $(this).data("original")) {
+        updatedData[fieldName] = $(this).val();
+      }
+    });
+    return updatedData;
+  }
+
+  function resetForm() {
+    $form[0].reset();
+
+    // input hidden: reset() não os limpa quando o JS mudou o valor
+    $("#observations").val("");
+    refreshNotesButton();
+
+    $form.find(".is-invalid").removeClass("is-invalid");
+    $form.find("input, select, textarea").removeData("original");
+
+    // Consulta de NIF: invalida pedidos em curso e limpa o estado
+    nifRequestId++;
+    lastNifChecked = "";
+    nifWaitingForInternet = false;
+    setNifStatus("", "");
+    $("#btnConsultNif").prop("disabled", false);
+
+    toggleFields();
+    current = 0;
+    updateWizard();
+  }
+
+  async function loadContactData(id, token) {
+    setLoading(true);
 
     try {
       const contact = await $.ajax({
         url: "contacts/ajax/get_contact.php",
         method: "POST",
-        data: { id: contactId },
+        data: { id: id },
         dataType: "json",
       });
 
-      console.log("Carregando dados do contato para edição...");
-      console.log(contact);
+      if (token !== loadToken) return; // o utilizador já abriu outro cliente
 
       if (!contact || !contact.id) {
-        alert("Contato não encontrado.");
+        contactModal.hide();
+        Swal.fire({
+          icon: "error",
+          title: "Erro!",
+          text: "Contato não encontrado.",
+        });
         return;
       }
 
-      // =========================
-      // ID GLOBAL
-      // =========================
-      window.__CONTACT_ID__ = contact.id;
-
-      // =========================
       // INPUTS / TEXTAREAS
-      // =========================
       $("#companyName").val(contact.name || "");
       $("#email").val(contact.email || "");
       $("#telephone").val(contact.telephone || "");
@@ -252,9 +507,7 @@ $(document).ready(function () {
       $("#pref_telephone").val(contact.pref_telephone || "");
       $("#pref_cellphone").val(contact.pref_cellphone || "");
 
-      // =========================
       // SELECTS NORMAIS
-      // =========================
       const selectFields = {
         "#type": contact.type,
         "#numberCopys": contact.numberCopys,
@@ -269,137 +522,159 @@ $(document).ready(function () {
         }
       });
 
-      // =========================
-      // PAÍS / CIDADE
-      // =========================
+      // PAÍS / CIDADE (só se o formulário tiver esses campos)
       await selectCountry(contact.country || "", contact.city || "");
-      // =========================
-      // ESTADO ORIGINAL
-      // =========================
-      $("#contactForm")
-        .find("input, select, textarea")
-        .each(function () {
-          $(this).data("original", $(this).val());
-        });
 
-      // =========================
-      // BOTÃO
-      // =========================
-      $("#saveContactButton").text("Salvar Alterações");
+      if (token !== loadToken) return;
 
-      console.log("Dados carregados com sucesso.");
+      // ESTADO ORIGINAL (para enviar só o que mudar)
+      snapshotOriginals();
     } catch (error) {
+      if (token !== loadToken) return;
+
       console.error("Erro ao carregar contato:", error);
 
-      alert("Erro ao carregar detalhes do contato.");
-    }
-  }
-
-  function toggleFields() {
-    let isChecked = $("#usar_definicoes").prop("checked");
-
-    // Vencimento, idioma e moeda são fixos; observações agora usam o botão de notas.
-    // Selects não podem ser editados, mas ainda serão enviados
-    if (isChecked) {
-      $("#numberCopys, #payment_method")
-        .addClass("blocked-select")
-        .attr("tabindex", "-1");
-    } else {
-      $("#numberCopys, #payment_method")
-        .removeClass("blocked-select")
-        .removeAttr("tabindex");
-    }
-  }
-
-  toggleFields(); // Executa ao carregar
-
-  $("#usar_definicoes").on("change", function () {
-    toggleFields();
-  });
-  function initPage() {
-    contactId = getQueryParam("id"); // Salva o ID globalmente
-
-    if (contactId && !isNaN(contactId)) {
-      $("#infoEdit").text("Editar Usuário");
-      $("#sideContact").text("Editar Usuário");
-      loadContactData(contactId);
-    } else {
-      selectCountry().then(() => {
-        $("#contactForm")
-          .find("input, select, textarea")
-          .each(function () {
-            $(this).data("original", $(this).val());
-          });
+      contactModal.hide();
+      Swal.fire({
+        icon: "error",
+        title: "Erro!",
+        text: "Erro ao carregar detalhes do contato.",
       });
+    } finally {
+      if (token === loadToken) setLoading(false);
     }
   }
 
+  // =====================================================================
+  // ABRIR O MODAL
+  // =====================================================================
+  window.openContactForm = async function (id = null) {
+    const parsed = parseInt(id, 10);
+    contactId = parsed > 0 ? parsed : null;
+    const token = ++loadToken;
+
+    resetForm();
+    applyModalMode();
+    contactModal.show();
+
+    if (contactId) {
+      await loadContactData(contactId, token);
+    } else {
+      await selectCountry();
+    }
+  };
+
+  $(document).on("click", "#newContact", function (e) {
+    e.preventDefault();
+    window.openContactForm();
+  });
+
+  // Ao fechar: descarta consultas de NIF ainda em curso
+  modalEl.addEventListener("hide.bs.modal", () => {
+    nifRequestId++;
+  });
+
+  // Depois de fechado: limpa tudo, para o próximo uso começar do zero
+  modalEl.addEventListener("hidden.bs.modal", () => {
+    contactId = null;
+    loadToken++;
+    resetForm();
+    applyModalMode();
+    setLoading(false);
+  });
+
+  // =====================================================================
+  // GRAVAR
+  // =====================================================================
   $(document).on("click", "#saveChangesContact", function (event) {
     event.preventDefault();
+    if (isSaving) return;
+
+    // Valida TODAS as etapas (antes só validava ao clicar em "Próximo",
+    // por isso a última etapa podia ser gravada com dados inválidos).
+    for (let i = 0; i < steps.length; i++) {
+      const error = findStepError(i);
+      if (error) return showStepError(i, error);
+    }
+
+    const isEdit = !!contactId;
+    const editedId = contactId;
     let formData;
     let url;
 
-    if (contactId) {
-      // Se o ID existe, atualiza apenas os campos modificados
+    if (isEdit) {
+      // Edição: envia apenas os campos modificados
       formData = getUpdatedFields();
-      formData["id"] = contactId;
+
+      if (Object.keys(formData).length === 0) {
+        contactModal.hide();
+        Swal.fire({
+          icon: "info",
+          title: "Sem alterações",
+          text: "Nenhum campo foi alterado.",
+          timer: 1800,
+          showConfirmButton: false,
+        });
+        return;
+      }
+
+      formData["id"] = editedId;
       url = "contacts/ajax/update_contact.php";
     } else {
-      // Se não há ID, envia todos os dados do formulário corretamente via FormData
-      formData = new FormData($("#contactForm")[0]);
+      // Novo cliente: envia todos os dados do formulário
+      formData = new FormData($form[0]);
       url = "contacts/ajax/save_contact.php";
     }
 
-    const validateFileds = () => {
-      const fieldName = document.querySelector(
-        "#contactForm input[name='name']",
-      );
-
-      if (
-        fieldName.length == " " ||
-        fieldName.length == 0 ||
-        fieldName.length <= 5
-      ) {
-        Swal.fire({
-          icon: "error",
-          title: "Erro!",
-          text: "",
-        });
-      }
-    };
+    isSaving = true;
+    saveBtn.disabled = true;
 
     $.ajax({
       url: url,
       method: "POST",
       data: formData,
+      dataType: "text", // o parse é feito abaixo, com tratamento de erro
       processData: !(formData instanceof FormData),
       contentType:
         formData instanceof FormData
           ? false
           : "application/x-www-form-urlencoded; charset=UTF-8",
       success: function (response) {
+        let res;
         try {
-          let res = JSON.parse(response);
-          if (res.status === "success") {
-            Swal.fire({
-              icon: "success",
-              title: "Sucesso!",
-              text: res.message,
-            }).then(() => {
-              window.location.href = "contacts.php";
-            });
-          } else {
-            Swal.fire({
-              icon: "error",
-              title: "Erro!",
-              text: res.message,
-            });
-          }
+          res = typeof response === "string" ? JSON.parse(response) : response;
         } catch (e) {
           Swal.fire({
             icon: "error",
             title: "Erro inesperado!",
             text: "Ocorreu um erro ao processar sua solicitação.",
+          });
+          return;
+        }
+
+        if (res && res.status === "success") {
+          contactModal.hide();
+
+          Swal.fire({
+            icon: "success",
+            title: "Sucesso!",
+            text: res.message,
+            timer: 1800,
+            showConfirmButton: false,
+          });
+
+          // Avisa a lista de clientes para se atualizar (contacts.js)
+          $(document).trigger("contact:saved", [
+            {
+              mode: isEdit ? "update" : "create",
+              id: isEdit ? editedId : res.id || null,
+            },
+          ]);
+        } else {
+          Swal.fire({
+            icon: "error",
+            title: "Erro!",
+            text: (res && res.message) || "Não foi possível salvar.",
           });
         }
       },
@@ -410,34 +685,14 @@ $(document).ready(function () {
           text: "Erro ao tentar salvar os dados. Tente novamente.",
         });
       },
+      complete: function () {
+        isSaving = false;
+        saveBtn.disabled = false;
+      },
     });
   });
 
-  function getQueryParam(param) {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get(param);
-  }
-
-  function getUpdatedFields() {
-    let updatedData = {};
-    $("#contactForm")
-      .find("input, select, textarea")
-      .each(function () {
-        let fieldName = $(this).attr("name");
-        if (fieldName && $(this).val() !== $(this).data("original")) {
-          updatedData[fieldName] = $(this).val();
-        }
-      });
-    return updatedData;
-  }
-
-  // Os valores originais são registrados após o carregamento (especialmente no modo edição)
-  // (no modo novo, vamos registrar após initPage)
-
-  // Evita que o botão dentro do formulário envie os dados automaticamente
-  $("#saveChanges").attr("type", "button");
-
-  // Botão para preencher dados de teste
+  // Botão para preencher dados de teste (só aparece em localhost)
   $("#btnFillContact").on("click", function () {
     $("#type").val("Normal").trigger("change");
     $("#companyName").val("Empresa Teste " + Math.floor(Math.random() * 1000));
@@ -469,17 +724,9 @@ $(document).ready(function () {
     }
   });
 
-  // =========================
+  // =====================================================================
   // CONSULTA DE NIF NA AGT (com cache e modo offline)
-  // =========================
-  const NIF_REGEX = /^(5\d+|\d{9}[A-Za-z0-9]+)$/;
-  const NIF_CACHE_KEY = "agt_nif_cache_v1";
-  const NIF_CACHE_TTL = 24 * 60 * 60 * 1000; // 24h
-  const NIF_CACHE_MAX = 200;
-  let lastNifChecked = "";
-  let nifRequestId = 0;
-  let nifWaitingForInternet = false;
-
+  // =====================================================================
   function setNifStatus(type, text) {
     const el = document.getElementById("nifStatus");
     if (!el) return;
@@ -572,6 +819,7 @@ $(document).ready(function () {
 
   async function consultNIF(force = false) {
     if (contactId) return; // só na criação de cliente
+    if (!modalEl.classList.contains("show")) return; // modal a fechar/fechado
 
     const field = document.getElementById("contributor");
     const value = field.value.trim();
@@ -599,6 +847,8 @@ $(document).ready(function () {
       });
       return;
     }
+
+    if (reqId !== nifRequestId) return;
 
     const tipoDocumento = detectDocType(value);
     const cacheKey = tipoDocumento + "|" + value.toUpperCase();
@@ -712,20 +962,39 @@ $(document).ready(function () {
     if (this.value.trim() !== lastNifChecked) setNifStatus("", "");
   });
   $("#btnConsultNif").on("click", () => consultNIF(true));
-  if (getQueryParam("id")) $("#btnConsultNif").hide(); // edição: sem consulta
 
   // Voltou a internet: repete a consulta que ficou pendente
   window.addEventListener("online", () => {
-    if (nifWaitingForInternet && $("#contributor").val().trim()) {
+    if (
+      nifWaitingForInternet &&
+      modalEl.classList.contains("show") &&
+      $("#contributor").val().trim()
+    ) {
       nifWaitingForInternet = false;
       consultNIF(true);
     }
   });
 
-  $("#country").on("change", function () {
-    if ($(this).data("ignore-change")) return;
-    loadCities($(this).val());
-  });
+  // =====================================================================
+  // INIT
+  // =====================================================================
+  updateWizard();
+  toggleFields();
 
-  initPage();
+  // Links antigos (register_contact.php) chegam aqui como ?new=1 ou ?edit=ID
+  const params = new URLSearchParams(window.location.search);
+  const editParam = parseInt(params.get("edit"), 10);
+
+  if (params.has("new") || editParam > 0) {
+    params.delete("new");
+    params.delete("edit");
+    const qs = params.toString();
+    history.replaceState(
+      null,
+      "",
+      window.location.pathname + (qs ? "?" + qs : ""),
+    );
+
+    window.openContactForm(editParam > 0 ? editParam : null);
+  }
 });

@@ -15,7 +15,7 @@ require_once '../app/views/layout_creation.php';
 ?>
 
 <style>
-    /* ===== TABELA ESTILO (igual a positions.php) ===== */
+    /* ===== TABELA ESTILO (mesmo padrão de positions.php) ===== */
     #departmentsTable {
         border-collapse: separate;
         border-spacing: 0 12px;
@@ -54,82 +54,41 @@ require_once '../app/views/layout_creation.php';
         transform: translateY(-4px) scale(1.01);
         box-shadow: 0 12px 28px rgba(0, 0, 0, 0.08);
     }
-
-    #departmentsTable tbody td {
-        border: none;
-        padding: 18px 16px;
-        vertical-align: middle;
-        font-size: 0.95rem;
-        background: #fff !important;
-        text-align: left !important;
-    }
-
-    #departmentsTable thead td {
-        background: #111 !important;
-        display: none;
-        max-width: 80px !important;
-    }
-
-    #departmentsTable tbody td:first-child {
-        border-top-left-radius: 14px;
-        border-bottom-left-radius: 14px;
-        background: #fff !important;
-        font-weight: 600;
-        color: #111;
-    }
-
-    #departmentsTable tbody th {
-        text-align: left !important;
-    }
-
-    #departmentsTable tbody td:last-child {
-        border-top-right-radius: 14px;
-        border-bottom-right-radius: 14px;
-        text-align: right;
-        padding-right: 24px;
-    }
 </style>
 
 <main class="main-content">
-    <div class="container-fluid mt-5">
-        <div class="row">
-            <div class="col-12">
-                <div>
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h2 class="mb-0 fw-bold mt-5">Departamentos</h2>
-                        <button class="btn btn-primary d-flex align-items-center justify-items-center align-content-center" data-bs-toggle="modal" data-bs-target="#modalDepartment">
-                            <i class="material-icons-round">add</i>
-                            Adicionar Departamento
-                        </button>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table id="departmentsTable" class="table w-100">
-                                <thead>
-                                    <tr>
-                                        <th>Nome</th>
-                                        <th>Departamento-pai</th>
-                                        <th>Funcionários</th>
-                                        <th>Ações</th>
-                                    </tr>
-                                </thead>
-                                <tbody></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+<div class="container-fluid mt-5">
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">Departamentos</h4>
+        <button class="btn btn-primary shadow-sm" data-bs-toggle="modal" data-bs-target="#modalDepartment" id="btnNewDepartment">
+            <i class="bi bi-plus-lg"></i> Novo Departamento
+        </button>
     </div>
+
+    <div class="table-responsive">
+        <table id="departmentsTable" class="table align-middle" style="width:100%">
+            <thead>
+                <tr>
+                    <th>Nome</th>
+                    <th>Departamento-pai</th>
+                    <th>Funcionários</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
 </main>
 
-<!-- Modal Departamento -->
-<div class="modal fade" id="modalDepartment" tabindex="-1" aria-labelledby="modalDepartmentLabel" aria-hidden="true">
+<!-- MODAL -->
+<div class="modal fade" id="modalDepartment" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <form id="formDepartment">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="modalDepartmentLabel">Cadastrar Departamento</h5>
+                    <h5 class="modal-title">Departamento</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
@@ -139,8 +98,8 @@ require_once '../app/views/layout_creation.php';
                     </div>
                     <div class="mb-3">
                         <label>Departamento-pai (opcional)</label>
-                        <select name="parent_department_id" id="parentDepartmentSelect" class="form-select">
-                            <option value="">Nenhum (topo da hierarquia)</option>
+                        <select name="parent_department_id" class="form-control" id="selectParentDepartment">
+                            <option value="">— Nenhum (topo da hierarquia) —</option>
                         </select>
                     </div>
                 </div>
@@ -156,18 +115,14 @@ require_once '../app/views/layout_creation.php';
 <script>
     $(document).ready(function() {
 
-        let currentEditId = null;
-
-        // Carrega as opções de "departamento-pai". Ao editar, remove
-        // o próprio departamento da lista (não pode ser pai de si mesmo).
         function loadParentOptions(excludeId) {
-            return $.getJSON('rh/ajax/list_departments.php', function(resp) {
-                const data = (resp && resp.data) || [];
-                const options = data
-                    .filter(d => !excludeId || String(d.id) !== String(excludeId))
-                    .map(d => `<option value="${d.id}">${d.name}</option>`)
-                    .join('');
-                $('#parentDepartmentSelect').html(`<option value="">Nenhum (topo da hierarquia)</option>${options}`);
+            $.getJSON('rh/ajax/list_departments.php', function(resp) {
+                const select = $('#selectParentDepartment');
+                select.find('option:not(:first)').remove();
+                (resp.data || []).forEach(dep => {
+                    if (excludeId && String(dep.id) === String(excludeId)) return;
+                    select.append(`<option value="${dep.id}">${dep.name}</option>`);
+                });
             });
         }
 
@@ -184,69 +139,60 @@ require_once '../app/views/layout_creation.php';
                     render: data => data || '<span class="text-muted">—</span>'
                 },
                 {
-                    data: 'employees_count',
-                    render: data => parseInt(data || 0)
+                    data: 'employee_count',
+                    render: data => `<span class="badge bg-light text-dark">${data || 0}</span>`
                 },
                 {
                     data: null,
-                    render: function(row) {
-                        return `
-                          <button class='btn btn-sm text-warning editDepartment'
+                    render: row => `
+                        <button class='btn btn-sm text-warning editDepartment'
                             data-id='${row.id}'
                             data-name='${row.name}'
-                            data-parent_department_id='${row.parent_department_id || ''}'
-                          ><i class="bi bi-pencil"></i></button>
-                          <button class='btn btn-sm text-danger deleteDepartment'
+                            data-parent='${row.parent_department_id || ''}'
+                        ><i class="bi bi-pencil"></i></button>
+                        <button class='btn btn-sm text-danger deleteDepartment'
                             data-id='${row.id}'
                             data-name='${row.name}'
-                          ><i class="bi bi-trash"></i></button>
-                        `;
-                    }
+                        ><i class="bi bi-trash"></i></button>
+                    `
                 }
             ]
         });
 
-        $('#modalDepartment').on('show.bs.modal', function() {
-            if (!currentEditId) {
-                loadParentOptions(null);
-            }
+        $('#btnNewDepartment').on('click', function() {
+            $('#formDepartment')[0].reset();
+            $('#editDepartmentId').remove();
+            loadParentOptions(null);
         });
 
         $('#formDepartment').on('submit', function(e) {
             e.preventDefault();
-            $.post('rh/ajax/save_department.php', $(this).serialize(), function(resp) {
-                if (!resp || !resp.success) {
-                    Swal.fire('Erro', (resp && resp.message) || 'Não foi possível salvar.', 'error');
-                    return;
-                }
-                $('#modalDepartment').modal('hide');
-                table.ajax.reload();
-                Swal.fire('Sucesso', 'Departamento salvo com sucesso!', 'success');
-                $('#editDepartmentId').remove();
-                currentEditId = null;
-            }, 'json').fail(function(xhr) {
-                const resp = xhr.responseJSON;
-                Swal.fire('Erro', (resp && resp.message) || 'Não foi possível salvar.', 'error');
-            });
+            $.post('rh/ajax/save_department.php', $(this).serialize())
+                .done(function(resp) {
+                    if (resp.success) {
+                        $('#modalDepartment').modal('hide');
+                        table.ajax.reload();
+                        Swal.fire('Sucesso', 'Departamento salvo com sucesso!', 'success');
+                        $('#editDepartmentId').remove();
+                    } else {
+                        Swal.fire('Erro', resp.message || 'Não foi possível salvar.', 'error');
+                    }
+                })
+                .fail(function(xhr) {
+                    const resp = xhr.responseJSON;
+                    Swal.fire('Erro', (resp && resp.message) || 'Não foi possível salvar o departamento.', 'error');
+                });
         });
 
         $('#departmentsTable').on('click', '.editDepartment', function() {
             const btn = $(this);
-            currentEditId = btn.data('id');
-
-            loadParentOptions(currentEditId).then(function() {
-                $('#formDepartment input[name=name]').val(btn.data('name'));
-                $('#parentDepartmentSelect').val(btn.data('parent_department_id') || '');
-            });
-
-            $('#formDepartment').append(`<input type="hidden" name="id" value="${currentEditId}" id="editDepartmentId">`);
+            loadParentOptions(btn.data('id'));
+            $('#formDepartment input[name=name]').val(btn.data('name'));
+            setTimeout(() => {
+                $('#selectParentDepartment').val(btn.data('parent') || '');
+            }, 300); // aguarda o loadParentOptions popular o select
+            $('#formDepartment').append(`<input type="hidden" name="id" value="${btn.data('id')}" id="editDepartmentId">`);
             $('#modalDepartment').modal('show');
-        });
-
-        $('#modalDepartment').on('hidden.bs.modal', function() {
-            $('#formDepartment')[0].reset();
-            $('#editDepartmentId').remove();
-            currentEditId = null;
         });
 
         $('#departmentsTable').on('click', '.deleteDepartment', function() {
@@ -254,16 +200,14 @@ require_once '../app/views/layout_creation.php';
             const name = $(this).data('name');
             Swal.fire({
                 title: 'Eliminar departamento?',
-                text: `Tem certeza que deseja eliminar o departamento "${name}"?`,
+                text: `Tem certeza que deseja eliminar "${name}"?`,
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonText: 'Sim, eliminar',
                 cancelButtonText: 'Cancelar'
             }).then((result) => {
                 if (!result.isConfirmed) return;
-                $.post('rh/ajax/delete_department.php', {
-                    id
-                }, function(resp) {
+                $.post('rh/ajax/delete_department.php', { id }, function(resp) {
                     if (resp.success) {
                         table.ajax.reload();
                         Swal.fire('Ok', 'Departamento eliminado.', 'success');

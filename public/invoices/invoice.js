@@ -70,7 +70,7 @@ $(function () {
 
       // Esconde todos os botões antes
       $(
-        "#btnFinalizar, #btnEditar, #btnCloneToInvoice, #btnNotaCredito, #generatePdf, #btnEnviar, #btnDeleteInvoice, #btnRecibo",
+        "#btnFinalizar, #btnEditar, #btnCloneToInvoice, #btnNotaCredito, #btnNotaDebito, #btnNotaEntrega, #generatePdf, #btnEnviar, #btnDeleteInvoice, #btnRecibo",
       ).addClass("d-none");
 
       // Preenche formulário/UI
@@ -82,7 +82,12 @@ $(function () {
           : inv.numero_validacao,
       );
 
-      $("#status-invoice").text(inv.status_invoice || "-");
+      const statusText = inv.status_invoice || "-";
+      $("#status-invoice")
+        .text(statusText)
+        .toggleClass("d-none", !statusText || statusText === "-")
+        .toggleClass("is-draft", statusText === "Rascunho");
+
       $("#subtitle-client").text(inv.client_name || "-");
 
       // Mostrar botões conforme status
@@ -97,6 +102,8 @@ $(function () {
         $("#btnRecibo").removeClass("d-none");
         $("#btnCloneToInvoice").removeClass("d-none");
         $("#btnNotaCredito").removeClass("d-none");
+        $("#btnNotaDebito").removeClass("d-none");
+        $("#btnNotaEntrega").removeClass("d-none");
         $("#generatePdf").removeClass("d-none");
         $("#btnEnviar").removeClass("d-none");
       }
@@ -1738,6 +1745,298 @@ $(function () {
         title: "Erro",
         text: error?.responseText || "Falha ao processar a Nota de Crédito.",
       });
+    }
+  });
+
+  // ---------- Nota de Débito ----------
+  $("#btnNotaDebito").on("click", async function () {
+    try {
+      if (!currentInvoice?.id) {
+        return Swal.fire({
+          icon: "error",
+          title: "Erro",
+          text: "Fatura ainda não carregada.",
+        });
+      }
+
+      // Notas de débito já emitidas para esta fatura
+      const verify = await $.ajax({
+        url: "invoices/ajax/debit_notes.php",
+        method: "GET",
+        dataType: "json",
+        data: { invoice_id: currentInvoice.id },
+      });
+
+      const existing = verify?.data || [];
+
+      if (existing.length) {
+        const last = existing[0];
+
+        const choice = await Swal.fire({
+          title: "Nota de Débito",
+          text: `Já existem ${existing.length} nota(s) de débito para esta fatura.`,
+          showDenyButton: true,
+          showCancelButton: true,
+          confirmButtonText: "Emitir nova",
+          denyButtonText: `Ver última (${last.serie} ${last.number})`,
+          cancelButtonText: "Cancelar",
+        });
+
+        if (choice.isDenied) {
+          return window.open(`invoices/debit_note_pdf.php?id=${last.id}`, "_blank");
+        }
+        if (!choice.isConfirmed) return;
+      }
+
+      const fmt = (v) =>
+        Number(v || 0).toLocaleString("pt-PT", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        });
+
+      // Formulário com linhas editáveis
+      const form = await Swal.fire({
+        title: "Emitir Nota de Débito",
+        width: 780,
+        html: `
+          <textarea id="ndReason" class="swal2-textarea" style="margin:0 0 12px;width:100%" placeholder="Motivo (obrigatório) – ex.: juros de mora, portes, correção de preço"></textarea>
+          <table class="table table-sm align-middle mb-2" style="font-size:.9rem">
+            <thead>
+              <tr>
+                <th style="text-align:left">Descrição</th>
+                <th style="width:80px">Qtd.</th>
+                <th style="width:120px">Preço unit.</th>
+                <th style="width:80px">IVA %</th>
+                <th style="width:110px;text-align:right">Total</th>
+                <th style="width:34px"></th>
+              </tr>
+            </thead>
+            <tbody id="ndLines"></tbody>
+          </table>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <button type="button" id="ndAddLine" class="swal2-styled" style="background:#6c757d;margin:0">+ Linha</button>
+            <div style="text-align:right;font-size:.9rem">
+              <div>Subtotal: <strong id="ndSub">0,00</strong></div>
+              <div>IVA: <strong id="ndTax">0,00</strong></div>
+              <div style="font-size:1.05rem">Total: <strong id="ndTotal">0,00</strong></div>
+            </div>
+          </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: "Emitir",
+        cancelButtonText: "Cancelar",
+        confirmButtonColor: "#3085d6",
+        didOpen: () => {
+          const body = document.getElementById("ndLines");
+
+          const recalc = () => {
+            let sub = 0;
+            let tax = 0;
+            body.querySelectorAll("tr").forEach((tr) => {
+              const q = parseFloat(tr.querySelector(".nd-qty").value) || 0;
+              const p = parseFloat(tr.querySelector(".nd-price").value) || 0;
+              const t = parseFloat(tr.querySelector(".nd-tax").value) || 0;
+              const base = Math.round(q * p * 100) / 100;
+              const taxVal = Math.round(base * t) / 100;
+              tr.querySelector(".nd-line-total").textContent = fmt(base);
+              sub += base;
+              tax += taxVal;
+            });
+            document.getElementById("ndSub").textContent = fmt(sub);
+            document.getElementById("ndTax").textContent = fmt(tax);
+            document.getElementById("ndTotal").textContent = fmt(sub + tax);
+          };
+
+          const addLine = () => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+              <td><input type="text" class="form-control form-control-sm nd-desc" maxlength="500" placeholder="Descrição"></td>
+              <td><input type="number" class="form-control form-control-sm nd-qty" min="0" step="any" value="1"></td>
+              <td><input type="number" class="form-control form-control-sm nd-price" min="0" step="any" value=""></td>
+              <td><input type="number" class="form-control form-control-sm nd-tax" min="0" max="100" step="any" value="14"></td>
+              <td class="nd-line-total" style="text-align:right">0,00</td>
+              <td><button type="button" class="btn btn-sm btn-link text-danger nd-del" title="Remover">&times;</button></td>
+            `;
+            tr.addEventListener("input", recalc);
+            tr.querySelector(".nd-del").addEventListener("click", () => {
+              if (body.querySelectorAll("tr").length > 1) {
+                tr.remove();
+                recalc();
+              }
+            });
+            body.appendChild(tr);
+          };
+
+          document.getElementById("ndAddLine").addEventListener("click", addLine);
+          addLine();
+        },
+        preConfirm: () => {
+          const reason = document.getElementById("ndReason").value.trim();
+          if (!reason) {
+            Swal.showValidationMessage("Indique o motivo da nota de débito.");
+            return false;
+          }
+
+          const items = [];
+          const rows = document.querySelectorAll("#ndLines tr");
+          for (let i = 0; i < rows.length; i++) {
+            const tr = rows[i];
+            const description = tr.querySelector(".nd-desc").value.trim();
+            const quantity = parseFloat(tr.querySelector(".nd-qty").value);
+            const unit_price = parseFloat(tr.querySelector(".nd-price").value);
+            const tax = parseFloat(tr.querySelector(".nd-tax").value);
+
+            if (!description) {
+              Swal.showValidationMessage(`Linha ${i + 1}: indique a descrição.`);
+              return false;
+            }
+            if (!(quantity > 0)) {
+              Swal.showValidationMessage(`Linha ${i + 1}: quantidade inválida.`);
+              return false;
+            }
+            if (!(unit_price > 0)) {
+              Swal.showValidationMessage(`Linha ${i + 1}: indique o preço unitário.`);
+              return false;
+            }
+            if (isNaN(tax) || tax < 0 || tax > 100) {
+              Swal.showValidationMessage(`Linha ${i + 1}: IVA deve estar entre 0 e 100.`);
+              return false;
+            }
+            items.push({ description, quantity, unit_price, tax });
+          }
+
+          return { reason, items };
+        },
+      });
+
+      if (!form.isConfirmed) return;
+
+      const res = await $.ajax({
+        url: "invoices/ajax/create_debit_note.php",
+        method: "POST",
+        dataType: "json",
+        data: {
+          invoice_id: currentInvoice.id,
+          reason: form.value.reason,
+          items: JSON.stringify(form.value.items),
+        },
+      });
+
+      if (res?.success && res?.debit_note_id) {
+        window.open(`invoices/debit_note_pdf.php?id=${res.debit_note_id}`, "_blank");
+      } else {
+        Swal.fire({
+          icon: "error",
+          title: "Erro",
+          text: res?.error || "Não foi possível emitir a Nota de Débito.",
+        });
+      }
+    } catch (error) {
+      console.error("Erro ao processar Nota de Débito:", error);
+
+      let msg = "Falha ao processar a Nota de Débito.";
+      try {
+        msg = JSON.parse(error?.responseText)?.error || msg;
+      } catch (_) {}
+
+      Swal.fire({ icon: "error", title: "Erro", text: msg });
+    }
+  });
+
+  // ---------- Nota de Entrega ----------
+  $("#btnNotaEntrega").on("click", async function () {
+    try {
+      if (!currentInvoice?.id) {
+        return Swal.fire({
+          icon: "error",
+          title: "Erro",
+          text: "Fatura ainda não carregada.",
+        });
+      }
+
+      // Notas já emitidas + se ainda há itens por entregar
+      const verify = await $.ajax({
+        url: "invoices/ajax/delivery_notes.php",
+        method: "GET",
+        dataType: "json",
+        data: { invoice_id: currentInvoice.id },
+      });
+
+      const existing = verify?.data || [];
+      const hasPending = verify?.has_pending !== false;
+
+      // Já existem notas: ver a última ou emitir nova (entrega do que falta)
+      if (existing.length) {
+        const last = existing[0];
+
+        if (!hasPending) {
+          return window.open(`invoices/delivery_note_pdf.php?id=${last.id}`, "_blank");
+        }
+
+        const choice = await Swal.fire({
+          title: "Nota de Entrega",
+          text: `Já existem ${existing.length} nota(s) para esta fatura. Ainda há itens por entregar.`,
+          showDenyButton: true,
+          showCancelButton: true,
+          confirmButtonText: "Emitir nova (itens em falta)",
+          denyButtonText: `Ver última (${last.serie} ${last.number})`,
+          cancelButtonText: "Cancelar",
+        });
+
+        if (choice.isDenied) {
+          return window.open(`invoices/delivery_note_pdf.php?id=${last.id}`, "_blank");
+        }
+        if (!choice.isConfirmed) return;
+      }
+
+      // Dados da nota
+      const form = await Swal.fire({
+        title: "Emitir Nota de Entrega?",
+        html: `
+          <input id="dnAddress" class="swal2-input" placeholder="Local de entrega (opcional – por defeito, morada do cliente)">
+          <textarea id="dnNotes" class="swal2-textarea" placeholder="Observações (opcional)"></textarea>
+        `,
+        showCancelButton: true,
+        confirmButtonText: "Emitir",
+        cancelButtonText: "Cancelar",
+        confirmButtonColor: "#3085d6",
+        preConfirm: () => ({
+          address: document.getElementById("dnAddress").value.trim(),
+          notes: document.getElementById("dnNotes").value.trim(),
+        }),
+      });
+
+      if (!form.isConfirmed) return;
+
+      const res = await $.ajax({
+        url: "invoices/ajax/create_delivery_note.php",
+        method: "POST",
+        dataType: "json",
+        data: {
+          invoice_id: currentInvoice.id,
+          delivery_address: form.value.address,
+          notes: form.value.notes,
+        },
+      });
+
+      if (res?.success && res?.delivery_note_id) {
+        window.open(`invoices/delivery_note_pdf.php?id=${res.delivery_note_id}`, "_blank");
+      } else {
+        Swal.fire({
+          icon: "error",
+          title: "Erro",
+          text: res?.error || "Não foi possível emitir a Nota de Entrega.",
+        });
+      }
+    } catch (error) {
+      console.error("Erro ao processar Nota de Entrega:", error);
+
+      let msg = "Falha ao processar a Nota de Entrega.";
+      try {
+        msg = JSON.parse(error?.responseText)?.error || msg;
+      } catch (_) {}
+
+      Swal.fire({ icon: "error", title: "Erro", text: msg });
     }
   });
 

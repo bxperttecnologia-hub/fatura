@@ -191,7 +191,7 @@ return array (
   'Moeda Padrão' => 'Moeda Padrão',
   'Salvar Alterações' => 'Salvar Alterações',
   'Gráficos de Faturas' => 'Gráficos de Faturas',
-  'Últimas Faturas Emitidas' => 'Últimas Faturas Emitidas',
+  'Últimas Facturas Emitidas' => 'Últimas Facturas Emitidas',
   'Contato' => 'Contato',
   'Faturas por Ano' => 'Faturas por Ano',
   'Faturas por Contato' => 'Faturas por Contato',

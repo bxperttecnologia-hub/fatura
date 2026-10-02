@@ -217,7 +217,7 @@ return [
     'Moeda Padrão' => 'Moeda Padrão',
     'Salvar Alterações' => 'Guardar Alterações',
     'Gráficos de Faturas' => 'Gráficos de Facturas',
-    'Últimas Faturas Emitidas' => 'Últimas Facturas Emitidas',
+    'Últimas Facturas Emitidas' => 'Últimas Facturas Emitidas',
     'Contato' => 'Contacto',
     'Faturas por Ano' => 'Facturas por Ano',
     'Faturas por Contato' => 'Facturas por Contacto',

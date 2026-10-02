@@ -51,12 +51,14 @@ $lastDay = date('Y-m-t', strtotime($firstDay));
 $stmt = $pdo->prepare("SELECT COUNT(*) FROM attendance 
                        WHERE employee_id = ? AND company_id = ? 
                        AND type = 'falta' 
-                       AND date BETWEEN ? AND ?");
+                       AND date BETWEEN ? AND ?
+                       AND date NOT IN (SELECT date FROM holidays WHERE company_id = ?)");
 $stmt->execute([
     $data['employee_id'],
     $company_id,
     $firstDay,
-    $lastDay
+    $lastDay,
+    $company_id
 ]);
 $data['absences'] = $stmt->fetchColumn();
 

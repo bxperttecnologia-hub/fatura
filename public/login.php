@@ -188,7 +188,7 @@ require_once '../app/views/head.php';
             </div>
 
             <!-- Header Azul Mobile -->
-            <div class="d-block d-md-none w-100" style="background: url('assets/img/fundo-login-vermelho.png') center/cover no-repeat; padding: 2rem 0;">
+            <div class="d-block d-md-none w-100" style="background: url('./assets/img/fundo-register.png') center/cover no-repeat; padding: 2rem 0;">
                 <div class="text-center">
                     <img src="assets/img/logo/BXpert-Branca.png" alt="BXpert Logo" style="max-height: 8rem; ">
                 </div>

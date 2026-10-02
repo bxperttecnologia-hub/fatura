@@ -376,13 +376,15 @@ foreach ($folhas as $index => $f) {
         AND company_id = ?
         AND type = 'falta'
         AND date BETWEEN ? AND ?
+        AND date NOT IN (SELECT date FROM holidays WHERE company_id = ?)
     ");
 
     $stmt->execute([
         $f['employee_id'],
         $company_id,
         $firstDay,
-        $lastDay
+        $lastDay,
+        $company_id
     ]);
 
     $faltas = (int)$stmt->fetchColumn();

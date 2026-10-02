@@ -12,18 +12,9 @@ if (!$company_id || !$id) {
 }
 
 // Impede deletar se estiver em uso por algum funcionário.
-// Fase 1: verifica primeiro por position_id (a fonte de verdade); soma
-// também quem ainda só tem o texto (TRIM) por ligar, para não deixar
-// apagar um cargo em uso só porque a migração ainda não correu para
-// esse funcionário.
-$stmt = $pdo->prepare('
-    SELECT COUNT(*) FROM employees
-    WHERE company_id = ?
-      AND (
-        position_id = ?
-        OR (position_id IS NULL AND TRIM(position) = (SELECT TRIM(name) FROM positions WHERE id = ? AND company_id = ?))
-      )
-');
+// Fase 1: verifica por position_id (fonte de verdade); TRIM() no texto
+// cobre o fallback de funcionários ainda não migrados (position_id nulo).
+$stmt = $pdo->prepare('SELECT COUNT(*) FROM employees WHERE company_id = ? AND (position_id = ? OR (position_id IS NULL AND TRIM(position) = (SELECT TRIM(name) FROM positions WHERE id = ? AND company_id = ?)))');
 $stmt->execute([$company_id, $id, $id, $company_id]);
 $inUse = (int)$stmt->fetchColumn();
 if ($inUse > 0) {

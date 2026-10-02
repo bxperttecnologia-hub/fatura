@@ -348,6 +348,9 @@
     }
 </style>
 
+<!-- Estilos do painel lateral de itens (necessário em todas as páginas onde a sidebar aparece) -->
+<link rel="stylesheet" href="items/item_drawer.css?v=1.1">
+
 <div class="sidebar" id="sidebar">
     <div class="brand">
         <a href="index.php">
@@ -380,7 +383,8 @@
             <i class="text-white menu-link-icon" data-lucide="chevron-down"></i>
         </button>
         <div class="submenu" id="produtos">
-            <a href="#" data-bs-toggle="modal" data-bs-target="#itemModal">
+            <!-- sem id="newContact": esse id já existe no botão "Novo item" do items.php -->
+            <a href="items.php" data-drawer-open="create">
                 <i class="text-white" data-lucide="plus"></i> Adicionar
             </a>
             <a href="items.php" data-link> <i data-lucide="list"></i> Meus Itens </a>
@@ -465,112 +469,52 @@
         </div>
 
     </div>
+
 </div>
 
 <script src="assets/js/lucide.js"></script>
+<!-- items.js NÃO vai aqui: é só da página items.php (chama loadItems() ao arrancar) -->
+
 <script>
     lucide.createIcons();
 
-
     $(document).ready(function() {
 
-        let current_plan = "";
+        // Accordion dos submenus (responsabilidade exclusiva da sidebar)
+        document.querySelectorAll('.nav-item[data-submenu]').forEach(button => {
+            button.addEventListener('click', e => {
+                e.stopPropagation();
 
-        // Assinatura / limites
-        $.getJSON('assets/ajax/get_company_limits.php', {
-            company_id: <?php echo (int)$_SESSION['user']['company_id']; ?>
+                const submenu = document.querySelector(button.dataset.submenu);
+                if (!submenu) return;
 
-        }, function(resp) {
+                const isOpen = submenu.classList.contains('open');
 
-            if (!resp.success) {
-                $('#subInfo').text('Não foi possível carregar os limites.');
+                const parent = button.parentElement;
+                Array.from(parent.children).forEach(el => {
+                    if (el.classList.contains('submenu') && el !== submenu) {
+                        el.classList.remove('open');
+                    }
+                    if (el.classList.contains('nav-item') && el !== button) {
+                        el.classList.remove('active');
+                    }
+                });
 
-                // Caso não consiga carregar o plano,
-                // podemos ocultar o submenu por segurança.
-                $('.submenu-rh').addClass('d-none');
+                if (isOpen) {
+                    submenu.classList.remove('open');
+                    button.classList.remove('active');
 
-                return;
-            }
-
-            // Guardar o plano retornado pela API
-            current_plan = String(resp.plan_name || '').trim();
-
-            // Data de expiração
-            const expIso = resp.plan_expires_at || '';
-
-            const exp = expIso ?
-                new Date(expIso + 'T00:00:00').toLocaleDateString('pt-PT') :
-                '-';
-
-            // Dias restantes
-            const days = (resp.days_left === null || resp.days_left === undefined) ?
-                '-' :
-                resp.days_left;
-
-            // Mostrar informações da assinatura
-            $('#subInfo').text(
-                `
-    $ {
-        current_plan
-    }•
-    vence em $ {
-        exp
-    }•
-    $ {
-        days
-    }
-    dias restantes`
-            );
-
-            // Normalizar o nome do plano para comparação
-            const plan = current_plan.toLowerCase();
-
-            // Planos que NÃO podem acessar RH
-            if (
-                plan === 'bxpert base' ||
-                plan === 'bxpert baza'
-            ) {
-                $('.submenu-rh').addClass('d-none');
-            } else {
-                $('.submenu-rh').removeClass('d-none');
-            }
-        });
-
-    });
-
-    // Accordion dos submenus (responsabilidade exclusiva da sidebar)
-    document.querySelectorAll('.nav-item[data-submenu]').forEach(button => {
-        button.addEventListener('click', e => {
-            e.stopPropagation();
-
-            const submenu = document.querySelector(button.dataset.submenu);
-            if (!submenu) return;
-
-            const isOpen = submenu.classList.contains('open');
-
-            const parent = button.parentElement;
-            Array.from(parent.children).forEach(el => {
-                if (el.classList.contains('submenu') && el !== submenu) {
-                    el.classList.remove('open');
-                }
-                if (el.classList.contains('nav-item') && el !== button) {
-                    el.classList.remove('active');
+                } else {
+                    submenu.classList.add('open');
+                    button.classList.add('active');
                 }
             });
-
-            if (isOpen) {
-                submenu.classList.remove('open');
-                button.classList.remove('active');
-
-            } else {
-                submenu.classList.add('open');
-                button.classList.add('active');
-            }
         });
-    });
 
-    document.addEventListener('click', e => {
-        document.querySelectorAll('.submenu').forEach(sm => sm.classList.remove('open'));
-        document.querySelectorAll('.nav-item.active').forEach(btn => btn.classList.remove('active'));
-    });
+        document.addEventListener('click', e => {
+            document.querySelectorAll('.submenu').forEach(sm => sm.classList.remove('open'));
+            document.querySelectorAll('.nav-item.active').forEach(btn => btn.classList.remove('active'));
+        });
+
+    }); // era "})();" -> chamava o resultado do ready() como função e dava TypeError
 </script>

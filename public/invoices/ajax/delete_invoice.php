@@ -52,6 +52,32 @@ try {
         throw new Exception('Factura não encontrada.');
     }
 
+    // Bloquear se já existirem notas de entrega ligadas a esta factura
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM delivery_notes
+        WHERE invoice_id = :id
+          AND company_id = :company_id
+    ");
+    $stmt->execute(['id' => $invoiceId, 'company_id' => $company_id]);
+
+    if ((int)$stmt->fetchColumn() > 0) {
+        throw new Exception('Esta factura tem notas de entrega emitidas e não pode ser eliminada ou cancelada.');
+    }
+
+    // Bloquear se já existirem notas de débito ligadas a esta factura
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM debit_notes
+        WHERE invoice_id = :id
+          AND company_id = :company_id
+    ");
+    $stmt->execute(['id' => $invoiceId, 'company_id' => $company_id]);
+
+    if ((int)$stmt->fetchColumn() > 0) {
+        throw new Exception('Esta factura tem notas de débito emitidas e não pode ser eliminada ou cancelada.');
+    }
+
     if ((int)$invoice['status'] === 1) {
 
         // Eliminar os itens

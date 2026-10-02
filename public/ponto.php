@@ -292,11 +292,16 @@ require_once '../app/views/layout_creation.php';
 
         $('#formPonto').on('submit', function(e) {
             e.preventDefault();
-            $.post('rh/ajax/save_attendance.php', $(this).serialize(), function() {
-                $('#modalPonto').modal('hide');
-                table.ajax.reload();
-                Swal.fire('Sucesso', 'Registro salvo com sucesso', 'success');
-            });
+            $.post('rh/ajax/save_attendance.php', $(this).serialize())
+                .done(function() {
+                    $('#modalPonto').modal('hide');
+                    table.ajax.reload();
+                    Swal.fire('Sucesso', 'Registro salvo com sucesso', 'success');
+                })
+                .fail(function(xhr) {
+                    const resp = xhr.responseJSON;
+                    Swal.fire('Erro', (resp && resp.message) || 'Não foi possível salvar o registo.', 'error');
+                });
         });
 
         $('#pontoTable').on('click', '.deleteRegistro', function() {

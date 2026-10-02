@@ -27,8 +27,9 @@ $lastDay = date('Y-m-t', strtotime($firstDay));
 $stmt = $pdo->prepare("SELECT COUNT(*) FROM attendance 
                        WHERE employee_id = ? AND company_id = ? 
                        AND type = 'falta' 
-                       AND date BETWEEN ? AND ?");
-$stmt->execute([$employee_id, $company_id, $firstDay, $lastDay]);
+                       AND date BETWEEN ? AND ?
+                       AND date NOT IN (SELECT date FROM holidays WHERE company_id = ?)");
+$stmt->execute([$employee_id, $company_id, $firstDay, $lastDay, $company_id]);
 $total_faltas = $stmt->fetchColumn();
 
 // Salário diário (30 dias padrão)
@@ -40,8 +41,13 @@ $thirteenth_subsidy = $base_salary * ($thirteenth_subsidy_pct / 100);
 $total_adicionais = $bonuses + $food_allowance + $transport_allowance + $vacation_subsidy + $thirteenth_subsidy + $commissions;
 $gross_salary = $base_salary + $total_adicionais;
 
-// INSS (Segurança Social) = 3% sobre o bruto
+// INSS (Segurança Social) = 3% sobre o bruto — encargo do trabalhador
 $inss_value = $gross_salary * 0.03;
+
+// INSS patronal = 8% sobre o bruto — encargo da empresa (Fase 2, item 1).
+// Não é descontado do funcionário; é custo adicional da empresa, mostrado
+// à parte nos relatórios (mapa INSS, dashboard de custo de folha).
+$inss_employer_value = $gross_salary * 0.08;
 
 // IRT (Tabela 2026 - Grupo A) calculado sobre (bruto - INSS)
 $irt_base = max(0, $gross_salary - $inss_value);
@@ -94,7 +100,7 @@ $net_salary = $gross_salary - $total_descontos;
 // os descontos a cada edição.
 if ($id) {
     $stmt = $pdo->prepare("UPDATE payroll 
-        SET reference_month = ?, base_salary = ?, bonuses = ?, food_allowance = ?, transport_allowance = ?, vacation_subsidy_pct = ?, thirteenth_subsidy_pct = ?, commissions = ?, sales = ?, discounts = ?, total_discounts = ?, inss_value = ?, irt_value = ?, net_salary = ?, payment_date = ?, status = ? 
+        SET reference_month = ?, base_salary = ?, bonuses = ?, food_allowance = ?, transport_allowance = ?, vacation_subsidy_pct = ?, thirteenth_subsidy_pct = ?, commissions = ?, sales = ?, discounts = ?, total_discounts = ?, inss_value = ?, inss_employer_value = ?, irt_value = ?, net_salary = ?, payment_date = ?, status = ? 
         WHERE id = ? AND company_id = ?");
     $stmt->execute([
         $reference_month,
@@ -109,6 +115,7 @@ if ($id) {
         $manual_discounts,
         $total_descontos,
         $inss_value,
+        $inss_employer_value,
         $irt_value,
         $net_salary,
         $payment_date,
@@ -118,8 +125,8 @@ if ($id) {
     ]);
 } else {
     $stmt = $pdo->prepare("INSERT INTO payroll 
-        (employee_id, company_id, reference_month, base_salary, bonuses, food_allowance, transport_allowance, vacation_subsidy_pct, thirteenth_subsidy_pct, commissions, sales, discounts, total_discounts, inss_value, irt_value, net_salary, payment_date, status) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        (employee_id, company_id, reference_month, base_salary, bonuses, food_allowance, transport_allowance, vacation_subsidy_pct, thirteenth_subsidy_pct, commissions, sales, discounts, total_discounts, inss_value, inss_employer_value, irt_value, net_salary, payment_date, status) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     $stmt->execute([
         $employee_id,
         $company_id,
@@ -135,6 +142,7 @@ if ($id) {
         $manual_discounts,
         $total_descontos,
         $inss_value,
+        $inss_employer_value,
         $irt_value,
         $net_salary,
         $payment_date,

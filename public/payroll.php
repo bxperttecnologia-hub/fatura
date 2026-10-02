@@ -154,6 +154,18 @@ require_once '../app/views/layout_creation.php';
                             <a href="rh/export/folha_export.php" class="btn btn-sm rounded-pill d-flex gap-1 align-items-center btn-outline-success">
                                 <i class="material-icons-round">download</i> Exportar Folha
                             </a>
+                            <div class="btn-group">
+                                <button type="button" class="btn btn-sm rounded-pill dropdown-toggle btn-outline-info" data-bs-toggle="dropdown">
+                                    <i class="material-icons-round">summarize</i> Mapa INSS
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="#" id="linkMapaInssPdf">PDF</a></li>
+                                    <li><a class="dropdown-item" href="#" id="linkMapaInssXlsx">Excel</a></li>
+                                </ul>
+                            </div>
+                            <button class="btn btn-sm rounded-pill d-flex gap-1 align-items-center btn-outline-dark" id="btnGerarFolhaMes">
+                                <i class="material-icons-round">auto_awesome</i> Gerar Folha do Mês
+                            </button>
                         </div>
                     </div>
 
@@ -463,7 +475,7 @@ require_once '../app/views/layout_creation.php';
             $('#formPayroll [name="transport_allowance"]')
                 .val(subTrans.toFixed(2));
 
-            // SELECTS
+            // SELECTS — valores por defeito do cargo
             $('#formPayroll select[name="vacation_subsidy_pct"]')
                 .val(subFerias)
                 .trigger('change');
@@ -472,6 +484,43 @@ require_once '../app/views/layout_creation.php';
                 .val(subDecimo)
                 .trigger('change');
 
+            // Fase 2, item 4: refina a sugestão com base em férias aprovadas
+            // este mês e nos meses trabalhados no ano (13º proporcional).
+            refreshSuggestedSubsidies();
+
+        });
+
+        // Fase 2, item 4 — sugestão automática de subsídio de férias / 13º mês.
+        // Nunca grava sozinho: só pré-preenche os selects, que continuam editáveis.
+        function refreshSuggestedSubsidies() {
+            const employeeId = $('#employee_id_payroll').val();
+            const referenceMonth = $('#formPayroll input[name="reference_month"]').val();
+            if (!employeeId || !referenceMonth) return;
+
+            $.getJSON('rh/ajax/get_suggested_subsidies.php', {
+                employee_id: employeeId,
+                reference_month: referenceMonth
+            }, function(resp) {
+                if (!resp.success) return;
+
+                $('#formPayroll select[name="vacation_subsidy_pct"]')
+                    .val(resp.suggested_vacation_subsidy_pct)
+                    .trigger('change');
+                $('#formPayroll select[name="thirteenth_subsidy_pct"]')
+                    .val(resp.suggested_thirteenth_subsidy_pct)
+                    .trigger('change');
+
+                $('#subsidyHint').remove();
+                $('#formPayroll select[name="thirteenth_subsidy_pct"]').closest('.mb-3')
+                    .after(`<div id="subsidyHint" class="form-text text-muted mb-2">
+                        <i class="bi bi-info-circle"></i> Férias: ${resp.vacation_reason}<br>
+                        <i class="bi bi-info-circle"></i> 13º: ${resp.thirteenth_reason}
+                    </div>`);
+            });
+        }
+
+        $('#formPayroll input[name="reference_month"]').on('change', function() {
+            refreshSuggestedSubsidies();
         });
 
         $('#formPayroll').on('submit', function(e) {
@@ -552,6 +601,48 @@ require_once '../app/views/layout_creation.php';
         }
 
         window.open(`rh/ajax/export_all_payroll_pdf.php?mes=${mes}`, '_blank');
+    });
+
+    // Fase 2: Mapa de Remunerações INSS (PDF / Excel) do mês selecionado
+    $('#linkMapaInssPdf, #linkMapaInssXlsx').on('click', function(e) {
+        e.preventDefault();
+        const mes = $('#inputMesReferencia').val();
+        if (!mes) {
+            return Swal.fire('Atenção', 'Selecione o mês de referência!', 'warning');
+        }
+        const format = this.id === 'linkMapaInssXlsx' ? 'xlsx' : 'pdf';
+        window.open(`rh/export/mapa_inss.php?mes=${mes}&format=${format}`, '_blank');
+    });
+
+    // Fase 5, item 1: "Gerar Folha do Mês" — cria folhas Pendente para quem
+    // ainda não tem folha nesse mês, pré-preenchidas a partir do cargo e da
+    // sugestão automática de subsídios. O RH revê e marca como Pago depois.
+    $('#btnGerarFolhaMes').on('click', function() {
+        const mes = $('#inputMesReferencia').val();
+        if (!mes) {
+            return Swal.fire('Atenção', 'Selecione o mês de referência antes de gerar a folha!', 'warning');
+        }
+        Swal.fire({
+            title: `Gerar folha de ${mes}?`,
+            text: 'Cria uma folha "Pendente" para cada funcionário ativo que ainda não tenha folha neste mês.',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Sim, gerar',
+            cancelButtonText: 'Cancelar'
+        }).then(result => {
+            if (!result.isConfirmed) return;
+            $.post('rh/ajax/generate_monthly_payroll.php', { reference_month: mes }, function(resp) {
+                if (resp.success) {
+                    table.ajax.reload();
+                    Swal.fire('Ok', resp.message, 'success');
+                } else {
+                    Swal.fire('Erro', resp.message || 'Não foi possível gerar a folha.', 'error');
+                }
+            }, 'json').fail(function(xhr) {
+                const resp = xhr.responseJSON;
+                Swal.fire('Erro', (resp && resp.message) || 'Não foi possível gerar a folha.', 'error');
+            });
+        });
     });
 </script>
 

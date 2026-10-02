@@ -1,6 +1,5 @@
 <?php
 require_once '../app/views/layout_creation.php';
-
 ?>
 
 <style>
@@ -91,66 +90,10 @@ require_once '../app/views/layout_creation.php';
         opacity: .9;
     }
 
-    .contact-status-filters {
-        display: inline-flex;
-        gap: 6px;
-        padding: 5px;
-        border: 1px solid #e2e8f0;
-        border-radius: 14px;
-        background: #f8fafc;
-    }
-
-    .contact-status-filter {
-        display: inline-flex;
-        align-items: center;
-        gap: 7px;
-        border: 0 !important;
-        border-radius: 10px !important;
-        padding: 8px 14px !important;
-        color: #64748b !important;
-        background: transparent !important;
-        font-size: .86rem;
-        font-weight: 600;
-        transition: .2s ease;
-    }
-
-    .contact-status-filter:hover {
-        color: #1d4ed8 !important;
-        background: #eaf3ff !important;
-    }
-
-    .contact-status-filter.is-selected {
-        color: #fff !important;
-        background: #2563eb !important;
-        box-shadow: 0 5px 12px rgba(37, 99, 235, .22);
-    }
-
-    .contact-status-filter.is-selected[data-filter="archived"] {
-        background: #64748b !important;
-        box-shadow: 0 5px 12px rgba(100, 116, 139, .22);
-    }
-
     /* ===== HEADER ===== */
 
     .container {
         margin-top: 80px !important;
-    }
-
-    .container h2 {
-        font-weight: 600;
-    }
-
-    .container .btn-primary {
-        background: #007abd;
-        border: none;
-        border-radius: 999px;
-        padding: 8px 18px;
-        transition: all 0.2s ease;
-    }
-
-    .container .btn-primary:hover {
-        background: #025d8e;
-        transform: translateY(-1px);
     }
 
     /* ===== CARD ===== */
@@ -167,109 +110,9 @@ require_once '../app/views/layout_creation.php';
         padding: 20px;
     }
 
-    /* BOTÕES EXPORT */
     .card-header .btn {
         border-radius: 999px;
         font-weight: 500;
-    }
-
-    /* ===== TABELA ESTILO ===== */
-    #contactTable {
-        border-collapse: separate;
-        border-spacing: 0 12px;
-        width: 100%;
-    }
-
-    /* HEADER */
-    #contactTable thead th {
-        border: none;
-        font-size: 12px;
-        color: #9ca3af;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.6px;
-        padding: 12px 16px;
-    }
-
-    /* ROW */
-    #contactTable tbody tr {
-        background: #fff !important;
-        border-radius: 14px;
-        transition: all 0.25s ease;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
-    }
-
-    /* HOVER PRO */
-    #contactTable tbody tr:hover {
-        transform: translateY(-4px) scale(1.01);
-        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.08);
-    }
-
-    /* CELLS */
-    #contactTable tbody td {
-        border: none;
-        padding: 18px 16px;
-        vertical-align: middle;
-        font-size: 0.95rem;
-        background: #fff !important;
-    }
-
-    /* BORDAS ARREDONDADAS */
-    #contactTable tbody td:first-child {
-        border-top-left-radius: 14px;
-        border-bottom-left-radius: 14px;
-        background: #fff !important;
-    }
-
-    #contactTable tbody th {
-        text-align: right !important;
-    }
-
-    #contactTable tbody td:last-child {
-        border-top-right-radius: 14px;
-        border-bottom-right-radius: 14px;
-        text-align: right;
-        padding-right: 24px;
-    }
-
-    /* ===== NOME (PRINCIPAL) ===== */
-    #contactTable tbody td:first-child {
-        font-weight: 600;
-        color: #111;
-    }
-
-    /* SUBINFO */
-    #contactTable tbody td small {
-        display: block;
-        color: #6b7280;
-    }
-
-    /* ===== ÍCONES ===== */
-    .table-icon {
-        font-size: 1.2rem;
-        color: #9ca3af;
-        transition: all 0.2s;
-    }
-
-    .table-icon:hover {
-        color: #111;
-        transform: scale(1.1);
-    }
-
-    /* ===== AÇÕES ===== */
-    .edit-contact .material-icons-round,
-    .delete-contact .material-icons-round {
-        transition: all 0.2s ease;
-    }
-
-    .edit-contact:hover .material-icons-round {
-        color: #2563eb;
-        transform: scale(1.2);
-    }
-
-    .delete-contact:hover .material-icons-round {
-        color: #dc2626;
-        transform: scale(1.2);
     }
 
     /* ===== MODAL MAIS PREMIUM ===== */
@@ -302,81 +145,6 @@ require_once '../app/views/layout_creation.php';
 
     .phone-card:hover {
         background: #e5e7eb;
-    }
-
-    /* ===== MOBILE ===== */
-    @media (max-width: 768px) {
-
-        #contactTable thead {
-            display: none;
-        }
-
-        #contactTable,
-        #contactTable tbody,
-        #contactTable tr,
-        #contactTable td {
-            display: block;
-            width: 100%;
-        }
-
-        #contactTable tbody tr {
-            margin-bottom: 1rem;
-            padding: 1rem;
-            border-radius: 14px;
-            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
-        }
-
-        #contactTable tbody td {
-            padding: 6px 0;
-            text-align: left;
-        }
-
-        #contactTable tbody td:first-child {
-            font-size: 1.1rem;
-            font-weight: 600;
-        }
-
-        #contactTable tbody td[data-label="Ações"] {
-            display: flex;
-            justify-content: flex-end;
-            gap: 1rem;
-            margin-top: 10px;
-        }
-    }
-
-    #dt-length-0 {
-        background: #fff !important;
-        border-radius: 8px;
-        padding: 5px;
-        border: 0.5px solid #e5e7eb;
-    }
-
-    #dt-search {
-        position: relative;
-        margin-bottom: 15px;
-    }
-
-    /* ÍCONE */
-    #dt-search-0 .search-icon {
-        position: absolute;
-        top: 50%;
-        left: 12px;
-        transform: translateY(-50%);
-        color: #9ca3af;
-        pointer-events: none;
-    }
-
-    /* INPUT */
-    #dt-search-0 {
-        padding-left: 35px !important;
-        border-radius: 12px !important;
-        border: 1px solid #e5e7eb !important;
-    }
-
-    /* FOCUS */
-    #dt-search-0:focus {
-        border-color: #16a34a !important;
-        box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.15) !important;
     }
 
     /* ===== MODAL HEADER ===== */
@@ -482,121 +250,6 @@ require_once '../app/views/layout_creation.php';
         }
     }
 
-    #downloadCSV {
-        border-radius: 999px;
-        font-weight: 500;
-    }
-
-    #downloadCSV:hover,
-    #downloadExcel:hover,
-    #downloadPDF:hover {
-        transform: translateY(-1px);
-    }
-
-    #downloadCSV:hover {
-        background: #16a34a;
-        color: #fff;
-    }
-
-    #downloadExcel:hover {
-        background: #2563eb;
-        color: #fff;
-    }
-
-    #downloadPDF:hover {
-        background: #dc2626;
-        color: #fff;
-    }
-
-    .edit-contact:hover i {
-        color: #2563eb;
-        transform: scale(1.2);
-    }
-
-    #downloadExcel {
-        border-radius: 999px;
-        font-weight: 500;
-    }
-
-    #downloadCSV:hover,
-    #downloadExcel:hover,
-    #downloadPDF:hover {
-        transform: translateY(-1px);
-    }
-
-    #downloadCSV:hover {
-        background: #16a34a;
-        color: #fff;
-    }
-
-    #downloadExcel:hover {
-        background: #2563eb;
-        color: #fff;
-    }
-
-    #downloadPDF:hover {
-        background: #dc2626;
-        color: #fff;
-    }
-
-    .edit-contact:hover i {
-        color: #2563eb;
-        transform: scale(1.2);
-    }
-
-    #downloadPDF {
-        border-radius: 999px;
-        font-weight: 500;
-    }
-
-    #downloadCSV,
-    #downloadExcel,
-    #downloadPDF,
-    #newContact {
-        transform: translateY(-1px);
-        font-size: 0.9rem;
-        padding: 5px 18px !important;
-        height: 35px !important;
-    }
-
-    #downloadCSV:hover {
-        background: #16a34a;
-        color: #fff;
-    }
-
-    #downloadExcel:hover {
-        background: #2563eb;
-        color: #fff;
-    }
-
-    #downloadPDF:hover {
-        background: #dc2626;
-        color: #fff;
-    }
-
-    .edit-contact:hover i {
-        color: #2563eb;
-        transform: scale(1.2);
-    }
-
-    .dt-paging-button .page-link {
-        border-radius: 10px !important;
-        margin: 0 2px;
-        border: none;
-        background: #f3f6fb;
-        color: #333;
-        font-size: 13px;
-    }
-
-    .dt-paging-button .page-item.active .page-link {
-        background: #2f6bff;
-        color: #fff;
-    }
-
-    .dt-paging-button .page-item.disabled .page-link {
-        opacity: 0.5;
-    }
-
     /* Modal de contacto: cartão compacto e minimalista */
     #contactModal .modal-dialog {
         max-width: 760px;
@@ -625,7 +278,7 @@ require_once '../app/views/layout_creation.php';
         background: #f8fafc;
     }
 
-    #contactModal .modal-body > .container-fluid {
+    #contactModal .modal-body>.container-fluid {
         padding: 0;
     }
 
@@ -695,8 +348,11 @@ require_once '../app/views/layout_creation.php';
         }
     }
 </style>
+<link rel="stylesheet" href="contacts/contacts.css?v=1.0">
 
 <body>
+
+    <?php require_once __DIR__ . '/contacts/partials/contact_form_modal.php'; ?>
 
     <div class="modal fade" id="contactModal" tabindex="-1">
         <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -840,62 +496,114 @@ require_once '../app/views/layout_creation.php';
     </div>
 
 
-    <main class="contacts-page">
+    <main class="contacts-page" id="contactsApp">
         <div class="container mt-5">
+
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2 class="mb-0"><?= t('Meus Clientes') ?></h2>
                 <div class="d-flex flex-wrap gap-2">
-                    <button id="downloadCSV" class="btn btn-outline-success rounded-pill d-flex align-items-center gap-2"><i class="bi bi-download align-middle fs-6"></i> <?= t('Baixar em CSV') ?></button>
-                    <button id="downloadExcel" class="btn btn-outline-primary rounded-pill d-flex align-items-center gap-2"><i class="bi bi-filetype-xls align-middle fs-6"></i> <?= t('Baixar em Excel') ?></button>
-                    <button id="downloadPDF" class="btn btn-outline-danger rounded-pill d-flex align-items-center gap-2"><i class="bi bi-filetype-pdf align-middle fs-6"></i> <?= t('Baixar em PDF') ?></button>
-                    <a href="register_contact.php" id="newContact" class="btn btn-primary d-flex align-items-center gap-2"><i class="bi bi-plus-circle align-middle fs-6"></i> <?= t('Novo Cliente') ?></a>
+                    <button type="button" id="newContact" class="btn btn-primary d-flex align-items-center rounded-pill gap-2 p-4"><i class="bi bi-plus-circle align-middle fs-6"></i> <?= t('Novo Cliente') ?></button>
                 </div>
             </div>
 
-            <div class="col-12">
-                <div class="card-body">
-                    <div class="contact-status-filters mb-3" role="group" aria-label="Estado dos contatos">
+            <!-- Tabs -->
+            <div class="cp-tabs" role="tablist" aria-label="Estado dos clientes">
+                <button type="button" role="tab" id="cpTab-active" class="cp-tab" data-tab="active" aria-selected="true" aria-controls="clientsPanel">
+                    <i class="bi bi-people" aria-hidden="true"></i>Ativos <span class="cp-count" aria-label="total">–</span>
+                </button>
+                <button type="button" role="tab" id="cpTab-archived" class="cp-tab" data-tab="archived" aria-selected="false" aria-controls="clientsPanel" tabindex="-1">
+                    <i class="bi bi-archive" aria-hidden="true"></i>Arquivados <span class="cp-count" aria-label="total">–</span>
+                </button>
+            </div>
 
-                        <button
-                            id="filterActive"
-                            class="btn contact-status-filter is-selected"
-                            data-filter="active">
-                            <i class="bi bi-people"></i>
-                            Ativos
-                        </button>
+            <section class="" aria-label="Lista de clientes">
 
-                        <button
-                            id="filterArchived"
-                            class="btn contact-status-filter"
-                            data-filter="archived">
-                            <i class="bi bi-archive"></i>
-                            Arquivados
-                        </button>
+                <!-- Toolbar -->
+                <div class="cp-toolbar">
+                    <div class="cp-toolbar-left">
+                        <form class="cp-search" role="search" onsubmit="return false;">
+                            <label for="cpSearch" class="visually-hidden-cp">Pesquisar clientes</label>
+                            <i class="bi bi-search" aria-hidden="true"></i>
+                            <input type="search" id="cpSearch" placeholder="Pesquisar clientes..." autocomplete="off" aria-keyshortcuts="Control+K Meta+K" aria-describedby="cpSearchHint">
+                            <span id="cpSearchHint" class="visually-hidden-cp">Pesquisa por nome, email, telefone, país ou cidade. Atalho: Ctrl mais K.</span>
+                            <kbd aria-hidden="true">Ctrl K</kbd>
+                            <button type="button" class="cp-btn cp-btn-icon cp-search-clear" aria-label="Limpar pesquisa"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+                        </form>
 
+                        <!-- Filtros -->
+                        <div class="cp-pop">
+                            <button type="button" id="cpFilterBtn" class="cp-btn cp-btn-ghost" data-pop aria-haspopup="dialog" aria-expanded="false" aria-controls="cpFilterPanel" aria-label="Filtros">
+                                <i class="bi bi-sliders" aria-hidden="true"></i><span>Filtros</span><span class="cp-badge-dot" aria-hidden="true" hidden>0</span>
+                            </button>
+                            <div class="cp-pop-panel cp-filter-panel" id="cpFilterPanel" role="dialog" aria-label="Filtros de clientes">
+                                <label for="cpFilterCountry">País</label>
+                                <select id="cpFilterCountry"></select>
+                                <label for="cpFilterCity">Cidade</label>
+                                <select id="cpFilterCity"></select>
+                                <label class="cp-check"><input type="checkbox" id="cpFilterPhone"> Clientes com telefone</label>
+                                <label class="cp-check"><input type="checkbox" id="cpFilterEmail"> Clientes com email</label>
+                                <div class="cp-filter-foot">
+                                    <button type="button" class="cp-btn cp-btn-ghost" data-filters="clear">Limpar filtros</button>
+                                    <button type="button" class="cp-btn cp-btn-primary" data-filters="close">Concluir</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <table id="contactTable" class="table nowrap w-100">
-                        <thead>
-                            <tr>
-                                <th><?= t('Nome') ?></th>
-                                <th><?= t('Telefone') ?></th>
-                                <th><?= t('País') ?>/<?= t('Cidade') ?></th>
-                                <th class="text-align-right"><?= t('Ações') ?></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                        </tbody>
-                    </table>
+
+                    <div class="cp-toolbar-right">
+                        <!-- ViewSwitcher -->
+                        <div class="cp-segmented" role="group" aria-label="Forma de visualização">
+                            <button type="button" class="cp-btn" data-view="cards" aria-pressed="true"><i class="bi bi-grid-3x3-gap" aria-hidden="true"></i><span>Blocos</span></button>
+                            <button type="button" class="cp-btn" data-view="list" aria-pressed="false"><i class="bi bi-list-ul" aria-hidden="true"></i><span>Lista</span></button>
+                        </div>
+
+                        <!-- Exportar -->
+                        <div class="cp-pop">
+                            <button type="button" id="cpExportBtn" class="cp-btn cp-btn-ghost" data-pop aria-haspopup="menu" aria-expanded="false" aria-controls="cpExportMenu" aria-busy="false">
+                                <span class="cp-export-icon"><i class="bi bi-download" aria-hidden="true"></i></span><span class="cp-export-text">Exportar</span><i class="bi bi-chevron-down" aria-hidden="true"></i>
+                            </button>
+                            <div class="cp-pop-panel is-end" id="cpExportMenu" role="menu" aria-label="Exportar clientes">
+                                <div class="cp-menu-title" aria-hidden="true">Exportar clientes</div>
+                                <div class="cp-menu-sep" role="separator"></div>
+                                <button type="button" role="menuitem" class="cp-menuitem" data-export="csv"><i class="bi bi-download" aria-hidden="true"></i><?= t('Baixar em CSV') ?></button>
+                                <button type="button" role="menuitem" class="cp-menuitem" data-export="excel"><i class="bi bi-filetype-xls" aria-hidden="true"></i><?= t('Baixar em Excel') ?></button>
+                                <button type="button" role="menuitem" class="cp-menuitem" data-export="pdf"><i class="bi bi-filetype-pdf" aria-hidden="true"></i><?= t('Baixar em PDF') ?></button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
+
+                <!-- Filtros ativos -->
+                <div class="cp-chips" id="cpChips" hidden></div>
+
+                <!-- Barra contextual de seleção (só aparece com seleção) -->
+                <div class="cp-bulkbar" id="cpBulkbar" role="region" aria-label="Ações para clientes selecionados" hidden>
+                    <span class="cp-bulk-count" aria-live="polite"></span>
+                    <button type="button" class="cp-linkbtn" data-bulk="all">Selecionar todos</button>
+                    <button type="button" class="cp-linkbtn" data-bulk="none">Limpar seleção</button>
+                    <button type="button" class="cp-btn cp-btn-ghost" data-bulk="status"></button>
+                    <button type="button" class="cp-btn cp-btn-ghost" data-bulk="export"><i class="bi bi-download" aria-hidden="true"></i>Exportar</button>
+                    <button type="button" class="cp-btn cp-btn-danger" data-bulk="delete"><i class="bi bi-trash" aria-hidden="true"></i>Excluir</button>
+                </div>
+
+                <!-- Conteúdo: Lista ou Blocos (mesma fonte de dados) -->
+                <div class="cp-body" id="clientsPanel" role="tabpanel" aria-labelledby="cpTab-active" aria-busy="true">
+                    <div id="clientsView"></div>
+                </div>
+
+                <!-- Paginação -->
+                <div class="cp-footer" id="clientsFooter" hidden></div>
+            </section>
         </div>
+
+        <!-- Anúncios para leitores de ecrã e notificações -->
+        <div id="cpLive" class="visually-hidden-cp" aria-live="polite" aria-atomic="true"></div>
+        <div id="cpToasts" class="cp-toasts" role="region" aria-label="Notificações"></div>
     </main>
 
 
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="contacts/contacts.js?v=0.5"></script>
-    <script>
-        lucide.createIcons();
-    </script>
+    <script src="contacts/contacts.js?v=1.0"></script>
+    <script src="contacts/register_contact.js?v=1.0"></script>
     <?php require_once '../app/views/footer.php'; ?>
 </body>
 

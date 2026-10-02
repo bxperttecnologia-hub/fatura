@@ -10,6 +10,22 @@ try {
 
     $pdo->beginTransaction();
 
+    // Bloquear se já existirem notas de entrega ligadas a esta factura
+    $dn = $pdo->prepare("SELECT COUNT(*) FROM delivery_notes WHERE invoice_id = ?");
+    $dn->execute([$invoiceId]);
+
+    if ((int)$dn->fetchColumn() > 0) {
+        throw new Exception('Esta factura tem notas de entrega emitidas e não pode ser reaberta.');
+    }
+
+    // Bloquear se já existirem notas de débito ligadas a esta factura
+    $nd = $pdo->prepare("SELECT COUNT(*) FROM debit_notes WHERE invoice_id = ?");
+    $nd->execute([$invoiceId]);
+
+    if ((int)$nd->fetchColumn() > 0) {
+        throw new Exception('Esta factura tem notas de débito emitidas e não pode ser reaberta.');
+    }
+
     $items = $pdo->prepare("
         SELECT ii.*, i.code, i.track_stock
         FROM invoice_items ii

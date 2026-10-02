@@ -14,24 +14,13 @@ $food_allowance = $_POST['food_allowance'] ?? 0;
 $transport_allowance = $_POST['transport_allowance'] ?? 0;
 $vacation_subsidy_pct = (int)($_POST['vacation_subsidy_pct'] ?? 0);
 $thirteenth_subsidy_pct = (int)($_POST['thirteenth_subsidy_pct'] ?? 0);
-$id = $_POST['id'] ?? null;
-
 $department_id = !empty($_POST['department_id']) ? (int)$_POST['department_id'] : null;
+$id = $_POST['id'] ?? null;
 
 if ($name === '') {
     http_response_code(400);
     echo 'Nome do cargo é obrigatório.';
     exit;
-}
-
-if ($department_id !== null) {
-    $stmtDept = $pdo->prepare("SELECT id FROM departments WHERE id = ? AND company_id = ?");
-    $stmtDept->execute([$department_id, $company_id]);
-    if (!$stmtDept->fetchColumn()) {
-        http_response_code(400);
-        echo 'Departamento inválido.';
-        exit;
-    }
 }
 
 if ($id) {

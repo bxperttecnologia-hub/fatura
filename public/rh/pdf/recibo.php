@@ -77,13 +77,15 @@ $stmt = $pdo->prepare("
     AND company_id = ?
     AND type = 'falta'
     AND date BETWEEN ? AND ?
+    AND date NOT IN (SELECT date FROM holidays WHERE company_id = ?)
 ");
 
 $stmt->execute([
     $dados['employee_id'],
     $company_id,
     $firstDay,
-    $lastDay
+    $lastDay,
+    $company_id
 ]);
 
 $absences = (int)$stmt->fetchColumn();

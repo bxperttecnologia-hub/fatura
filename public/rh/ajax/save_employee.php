@@ -28,7 +28,13 @@ $id = !empty($id) ? (int)$id : null;
 
 $name            = trim($_POST['employee_name'] ?? '');
 $bi              = trim($_POST['bi'] ?? '');
+$email           = trim($_POST['email'] ?? '');
+$phone_ddi       = trim($_POST['phone_ddi'] ?? '');
+$phone           = trim($_POST['phone'] ?? '');
 $position        = trim($_POST['position'] ?? '');
+$position_id     = !empty($_POST['position_id']) ? (int)$_POST['position_id'] : null;
+$department_id   = !empty($_POST['department_id']) ? (int)$_POST['department_id'] : null;
+$manager_id      = !empty($_POST['manager_id']) ? (int)$_POST['manager_id'] : null;
 $salary          = (float)($_POST['salary'] ?? 0);
 $status          = trim($_POST['status'] ?? 'ativo');
 
@@ -38,10 +44,13 @@ $marital_status  = trim($_POST['marital_status'] ?? '');
 $academic_level  = trim($_POST['academic_level'] ?? '');
 $contract_type   = trim($_POST['contract_type'] ?? '');
 $admission_date  = $_POST['admission_date'] ?? null;
-$iban            = trim($_POST['iban'] ?? '');
 
-$department_id = !empty($_POST['department_id']) ? (int)$_POST['department_id'] : null;
-$manager_id    = !empty($_POST['manager_id']) ? (int)$_POST['manager_id'] : null;
+// IBAN de Angola: "AO" + 23 dígitos = 25 caracteres no total. Normaliza
+// removendo espaços/maiúsculas antes de validar e gravar (o frontend já
+// formata com espaços agrupados de 4 em 4 para leitura, mas a base de
+// dados guarda sempre a versão compacta, sem espaços).
+$iban = strtoupper(trim($_POST['iban'] ?? ''));
+$iban = preg_replace('/\s+/', '', $iban);
 
 /*
 |--------------------------------------------------------------------------
@@ -54,65 +63,73 @@ if (empty($name)) {
     exit('Nome obrigatório.');
 }
 
-if (empty($position)) {
+if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    http_response_code(400);
+    exit('E-mail inválido.');
+}
+
+// IBAN é opcional, mas se preenchido tem de respeitar o formato angolano:
+// "AO" + 23 dígitos = 25 caracteres no total (ex: AO06000600001234567890154).
+if ($iban !== '' && !preg_match('/^AO\d{23}$/', $iban)) {
+    http_response_code(400);
+    exit('IBAN inválido. O formato de Angola é "AO" seguido de 23 dígitos (25 caracteres no total).');
+}
+
+if (empty($position) && !$position_id) {
     http_response_code(400);
     exit('Cargo obrigatório.');
 }
 
-// Fase 1: o formulário continua a enviar o CARGO como texto (select
-// existente, sem alterações no frontend) — resolvemos o position_id
-// correspondente aqui, no mesmo padrão de comparação usado em
-// search_employees.php (TRIM nos dois lados, mesma company_id).
-// employees.position (texto) continua a ser gravado como cache de
-// leitura; se o texto não corresponder a nenhuma position existente
-// (ex.: cargo digitado à mão em algum fluxo antigo), position_id fica
-// NULL sem bloquear a gravação do funcionário.
-$position_id = null;
-if ($position !== '') {
-    $stmtPos = $pdo->prepare("SELECT id FROM positions WHERE company_id = ? AND TRIM(name) = ?");
+/*
+|--------------------------------------------------------------------------
+| FASE 1: RESOLUÇÃO DE CARGO / DEPARTAMENTO / CHEFIA
+|--------------------------------------------------------------------------
+| - Se o formulário já envia position_id (select de cargo), usa-o como
+|   fonte de verdade e sincroniza employees.position (texto) a partir do
+|   nome do cargo, só como cache de leitura para telas antigas.
+| - Se só vier texto livre (formulário ainda não migrado), tenta encontrar
+|   o position_id correspondente por TRIM()+case-insensitive; se não achar,
+|   fica null (não cria cargo automaticamente aqui — isso é feito só na
+|   migração em lote, migrations/fase1_migrate_positions.php).
+*/
+
+if ($position_id) {
+    $stmtPos = $pdo->prepare('SELECT name FROM positions WHERE id = ? AND company_id = ?');
+    $stmtPos->execute([$position_id, $company_id]);
+    $posRow = $stmtPos->fetch(PDO::FETCH_ASSOC);
+    if (!$posRow) {
+        http_response_code(400);
+        exit('Cargo inválido.');
+    }
+    $position = $posRow['name'];
+} elseif ($position !== '') {
+    $stmtPos = $pdo->prepare('SELECT id FROM positions WHERE company_id = ? AND TRIM(name) = TRIM(?)');
     $stmtPos->execute([$company_id, $position]);
-    $position_id = $stmtPos->fetchColumn() ?: null;
+    $foundId = $stmtPos->fetchColumn();
+    if ($foundId) {
+        $position_id = (int)$foundId;
+    }
 }
 
-if ($department_id !== null) {
-    $stmtDept = $pdo->prepare("SELECT id FROM departments WHERE id = ? AND company_id = ?");
-    $stmtDept->execute([$department_id, $company_id]);
-    if (!$stmtDept->fetchColumn()) {
+if ($department_id) {
+    $stmtDep = $pdo->prepare('SELECT COUNT(*) FROM departments WHERE id = ? AND company_id = ?');
+    $stmtDep->execute([$department_id, $company_id]);
+    if (!$stmtDep->fetchColumn()) {
         http_response_code(400);
         exit('Departamento inválido.');
     }
 }
 
-if ($manager_id !== null) {
-    if ($id !== null && $manager_id === $id) {
+if ($manager_id) {
+    if ($id && $manager_id === $id) {
         http_response_code(400);
-        exit('Um funcionário não pode ser chefe de si próprio.');
+        exit('Um funcionário não pode ser a sua própria chefia direta.');
     }
-
-    $stmtMgr = $pdo->prepare("SELECT id, manager_id FROM employees WHERE id = ? AND company_id = ?");
+    $stmtMgr = $pdo->prepare('SELECT COUNT(*) FROM employees WHERE id = ? AND company_id = ?');
     $stmtMgr->execute([$manager_id, $company_id]);
-    $manager = $stmtMgr->fetch(PDO::FETCH_ASSOC);
-
-    if (!$manager) {
+    if (!$stmtMgr->fetchColumn()) {
         http_response_code(400);
         exit('Chefia direta inválida.');
-    }
-
-    // Impede ciclos na cadeia de chefia (A chefia B chefia A...), ao
-    // editar um funcionário já existente.
-    if ($id !== null) {
-        $ancestorId = $manager['manager_id'];
-        $depth = 0;
-        while ($ancestorId !== null && $depth < 50) {
-            if ((int)$ancestorId === $id) {
-                http_response_code(400);
-                exit('Essa chefia criaria um ciclo na hierarquia (o funcionário acabaria por chefiar-se a si próprio indiretamente).');
-            }
-            $stmtAsc = $pdo->prepare("SELECT manager_id FROM employees WHERE id = ? AND company_id = ?");
-            $stmtAsc->execute([$ancestorId, $company_id]);
-            $ancestorId = $stmtAsc->fetchColumn();
-            $depth++;
-        }
     }
 }
 
@@ -297,6 +314,9 @@ try {
 
                 name = :name,
                 bi = :bi,
+                email = :email,
+                phone_ddi = :phone_ddi,
+                phone = :phone,
                 position = :position,
                 position_id = :position_id,
                 department_id = :department_id,
@@ -324,6 +344,9 @@ try {
 
             ':name'            => $name,
             ':bi'              => $bi,
+            ':email'           => $email,
+            ':phone_ddi'       => $phone_ddi,
+            ':phone'           => $phone,
             ':position'        => $position,
             ':position_id'     => $position_id,
             ':department_id'   => $department_id,
@@ -361,6 +384,9 @@ try {
                 company_id,
                 name,
                 bi,
+                email,
+                phone_ddi,
+                phone,
                 position,
                 position_id,
                 department_id,
@@ -385,6 +411,9 @@ try {
                 :company_id,
                 :name,
                 :bi,
+                :email,
+                :phone_ddi,
+                :phone,
                 :position,
                 :position_id,
                 :department_id,
@@ -412,6 +441,9 @@ try {
             ':company_id'      => $company_id,
             ':name'            => $name,
             ':bi'              => $bi,
+            ':email'           => $email,
+            ':phone_ddi'       => $phone_ddi,
+            ':phone'           => $phone,
             ':position'        => $position,
             ':position_id'     => $position_id,
             ':department_id'   => $department_id,
@@ -438,10 +470,22 @@ try {
 
     $pdo->commit();
 
+    // Fase 2, item 6: alerta (não bloqueia) se o salário base ficar abaixo
+    // do salário mínimo nacional vigente, configurado por empresa em
+    // rh_settings (nunca fixo no código).
+    $salaryWarning = null;
+    $stmtMin = $pdo->prepare('SELECT salario_minimo_nacional FROM rh_settings WHERE company_id = ?');
+    $stmtMin->execute([$company_id]);
+    $salarioMinimo = $stmtMin->fetchColumn();
+    if ($salarioMinimo !== false && $salary < (float)$salarioMinimo) {
+        $salaryWarning = 'Atenção: o salário base (Kz ' . number_format($salary, 2, ',', '.') . ') está abaixo do salário mínimo nacional configurado (Kz ' . number_format((float)$salarioMinimo, 2, ',', '.') . ').';
+    }
+
     echo json_encode([
         'success' => true,
         'id'      => $id,
-        'message' => $id ? 'Funcionário salvo com sucesso.' : 'Erro.'
+        'message' => $id ? 'Funcionário salvo com sucesso.' : 'Erro.',
+        'warning' => $salaryWarning
     ]);
 } catch (Exception $e) {
 

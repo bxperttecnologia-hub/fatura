@@ -59,7 +59,7 @@ $graphs = [
     ]
 ];
 
-// Consulta para obter as últimas faturas emitidas
+// Consulta para obter as Últimas Facturas emitidas
 $queryInvoices = "SELECT i.*,c.name,
         concat(YEAR(i.issue_date),'/',i.id) AS codigo, cc.currency as currency_name, cc.symbol, cc.position,
         cc.iso_code, ist.name as status_name

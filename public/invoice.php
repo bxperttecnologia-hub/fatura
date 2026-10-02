@@ -2,12 +2,54 @@
 require_once '../app/views/layout_creation.php';
 ?>
 <style>
+:root {
+        --invoice-surface: #ffffff;
+        --invoice-bg: #f4f7fb;
+        --invoice-border: #e5e7eb;
+        --invoice-muted: #667085;
+        --invoice-text: #111827;
+        --invoice-subtle: #475467;
+        --invoice-primary: #0f172a;
+        --invoice-primary-strong: #0b1220;
+        --invoice-secondary: #f8fafc;
+        --invoice-secondary-border: #d9e0ea;
+        --invoice-focus: #2563eb;
+        --invoice-focus-soft: rgba(37, 99, 235, 0.18);
+        --invoice-shadow: 0 16px 32px rgba(15, 23, 42, 0.08);
+    }
+
+    body {
+        background: var(--invoice-bg);
+    }
+
+    .invoice-shell {
+        max-width: 1240px;
+        margin: 2.5rem auto 0;
+        padding: 0 1rem 2rem;
+    }
+
+    .invoice-layout {
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+    }
+
+    .invoice-preview-panel {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
     .invoice-header {
-        background: #f6f6f6;
-        border: 1px solid #e1e1e1;
-        border-top-left-radius: 3px;
-        border-top-right-radius: 3px;
-        padding: 18px 20px 10px 20px;
+        width: 100%;
+        max-width: 190mm;
+        background: var(--invoice-surface);
+        border: 1px solid var(--invoice-border);
+        border-radius: 18px 18px 12px 12px;
+        padding: 1.25rem 1.5rem 1rem;
+        box-shadow: var(--invoice-shadow);
+        color: var(--invoice-text);
     }
 
     .pagea4 {
@@ -16,98 +58,219 @@ require_once '../app/views/layout_creation.php';
         margin: 0 auto;
     }
 
-    .invoice-header .d-flex {
+    .invoice-header__top {
         display: flex;
-        justify-content: space-between;
         align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
     }
 
-    .invoice-header span {
-        font-size: 1.25rem;
-        font-weight: 500;
-        color: #232323;
+    .invoice-header__eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: .35rem;
+        font-size: .7rem;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--invoice-muted);
+        margin-bottom: .35rem;
     }
 
-    .invoice-header #fatura-id {
-        font-weight: 600;
+    .invoice-header__title {
+        margin: 0;
+        font-size: clamp(1.35rem, 2vw, 2rem);
+        line-height: 1.2;
+        font-weight: 700;
+        color: var(--invoice-text);
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: .6rem;
     }
 
-    .invoice-header .subtitle {
+    .invoice-header__title strong {
+        font-weight: 700;
+    }
+
+    .invoice-header__subtitle {
         display: block;
-        font-size: .75rem;
-        color: #666;
-        margin-top: -3px;
-        letter-spacing: .5px;
+        margin-top: .35rem;
+        color: var(--invoice-subtle);
+        font-size: .82rem;
+        font-weight: 500;
+    }
+
+    .invoice-header__meta {
+        margin: .4rem 0 0;
+        color: var(--invoice-muted);
+        font-size: .8rem;
+        font-weight: 600;
     }
 
     #status-invoice {
-        border: 1px solid #267fa8;
-        color: #267fa8;
-        border-radius: 4px;
-        padding: 2px 16px;
-        font-size: 1em;
-        font-weight: 500;
-        background: #fff;
-        min-width: 64px;
-        text-align: center;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        padding: .45rem .8rem;
+        font-size: .7rem;
+        line-height: 1;
+        font-weight: 700;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        background: #eef2ff;
+        color: #3730a3;
+        border: 1px solid rgba(55, 48, 163, 0.18);
+        min-width: 90px;
     }
 
-    /* ② –– painel lateral */
-    .action-panel {
-        position: sticky;
-        top: 60px;
-        /* ou 16px, ajusta pra não grudar total no topo */
-        align-self: flex-start;
-        /* mantém os outros estilos */
-        width: 240px;
-        background: #fff;
-        /* border: 1px solid #dee2e6; */
-        border-radius: .5rem;
-        /* box-shadow: 0 0 .75rem rgba(0, 0, 0, .08); */
-        padding: 1rem;
-        font-size: .925rem;
-        z-index: 10;
-        /* pra ficar acima de conteúdo se preciso */
+    .invoice-status-badge.is-draft {
+        background: #f3f4f6;
+        color: #374151;
+        border-color: rgba(55, 65, 81, 0.14);
     }
 
-    .action-panel .btn {
+    .invoice-toolbar {
+        width: 100%;
+        max-width: 190mm;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: .75rem;
+        margin-top: 1rem;
+        padding-top: .85rem;
+        border-top: 1px solid var(--invoice-border);
+    }
+
+    .invoice-toolbar__group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .75rem;
+    }
+
+    .btn-invoice {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: .5rem;
+        min-height: 44px;
+        padding: .7rem 1rem;
+        border-radius: 12px;
+        font-size: .92rem;
+        font-weight: 600;
+        line-height: 1.1;
+        border: 1px solid transparent;
+        transition: transform .15s ease, box-shadow .15s ease, background-color .15s ease, border-color .15s ease;
+        cursor: pointer;
+        text-decoration: none;
+    }
+
+    .btn-invoice:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08);
+    }
+
+    .btn-invoice:focus-visible,
+    .dropdown-toggle:focus-visible,
+    .dropdown-item:focus-visible,
+    .btn:focus-visible,
+    .form-control:focus-visible,
+    .form-select:focus-visible {
+        outline: 3px solid var(--invoice-focus-soft);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 3px var(--invoice-focus-soft);
+    }
+
+    .btn-invoice:disabled,
+    .dropdown-item:disabled {
+        opacity: .55;
+        cursor: not-allowed;
+        pointer-events: none;
+    }
+
+    .btn-invoice--primary {
+        background: var(--invoice-primary);
+        border-color: var(--invoice-primary);
+        color: #fff;
+    }
+
+    .btn-invoice--primary:hover {
+        background: var(--invoice-primary-strong);
+        border-color: var(--invoice-primary-strong);
+        color: #fff;
+    }
+
+    .btn-invoice--secondary {
+        background: var(--invoice-surface);
+        border-color: var(--invoice-secondary-border);
+        color: var(--invoice-text);
+    }
+
+    .btn-invoice--secondary:hover {
+        background: var(--invoice-secondary);
+        border-color: #c8d0db;
+        color: var(--invoice-text);
+    }
+
+    .btn-invoice--ghost {
+        background: transparent;
+        border-color: var(--invoice-secondary-border);
+        color: var(--invoice-text);
+    }
+
+    .btn-invoice--ghost:hover {
+        background: var(--invoice-secondary);
+        border-color: #c8d0db;
+    }
+
+    .invoice-more {
+        margin-left: auto;
+    }
+
+    .invoice-more .dropdown-toggle {
+        min-width: 148px;
+    }
+
+    .dropdown-menu {
+        border: 1px solid var(--invoice-border);
+        border-radius: 12px;
+        box-shadow: 0 18px 32px rgba(15, 23, 42, 0.12);
+        padding: .5rem;
+        min-width: 220px;
+    }
+
+    .dropdown-item {
         display: flex;
         align-items: center;
-        /* ícone + texto centralizados */
-        gap: .35rem;
-    }
-
-    .action-panel .section-title {
+        gap: .6rem;
+        width: 100%;
+        padding: .7rem .8rem;
+        border: none;
+        border-radius: 10px;
+        background: transparent;
+        color: var(--invoice-text);
+        font-size: .92rem;
         font-weight: 600;
-        font-size: .75rem;
-        letter-spacing: .02em;
-        text-transform: uppercase;
-        margin: .75rem 0 .25rem;
-        border-bottom: 1px solid #ced4da;
-        padding-bottom: 2px;
-        color: #6c757d;
+        text-align: left;
+        min-height: 42px;
     }
 
-    .btn-purple {
-        background-color: #6f42c1;
-        border-color: #6f42c1;
-        color: #fff;
+    .dropdown-item:hover,
+    .dropdown-item:focus-visible {
+        background: var(--invoice-secondary);
+        color: var(--invoice-text);
     }
 
-    .btn-purple:hover {
-        background-color: #5a32a3;
-        border-color: #5a32a3;
-        color: #fff;
+    .dropdown-item.danger {
+        color: #b42318;
     }
 
-    .btn-purple:focus,
-    .btn-purple:active {
-        background-color: #512d91;
-        border-color: #512d91;
-        color: #fff;
+    .dropdown-item.danger:hover,
+    .dropdown-item.danger:focus-visible {
+        background: #fff1f2;
     }
 
-    /* ===== Pré-visualizar e imprimir ===== */
     .pp-label {
         font-size: .75rem;
         font-weight: 700;
@@ -182,87 +345,151 @@ require_once '../app/views/layout_creation.php';
             height: 60vh;
         }
     }
+
+    @media (max-width: 767.98px) {
+        .invoice-shell {
+            margin-top: 1.25rem;
+            padding-inline: .75rem;
+        }
+
+        .invoice-toolbar {
+            gap: .6rem;
+        }
+
+        .invoice-toolbar__group {
+            width: 100%;
+        }
+
+        .btn-invoice {
+            flex: 1 1 calc(50% - .4rem);
+            min-width: 0;
+        }
+
+        .invoice-more {
+            width: 100%;
+            margin-left: 0;
+        }
+
+        .invoice-more .dropdown-toggle {
+            width: 100%;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .invoice-header {
+            padding: 1rem;
+        }
+
+        .invoice-header__top {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .invoice-toolbar__group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            width: 100%;
+        }
+
+        .btn-invoice {
+            width: 100%;
+            flex-basis: auto;
+        }
+    }
 </style>
 
-<main>
-    <!-- ===== CONTAINER LADO‑A‑LADO ===== -->
-    <div class="d-flex gap-4 mt-5 no-print justify-content-center align-items-center">
-        <!-- ==== FATURA (cresce até encher) ==== -->
-        <div class=" flex-column d-flex justify-content-center">
-
+<main class="invoice-shell">
+    <div class="invoice-layout no-print">
+        <div class="invoice-preview-panel">
             <div class="invoice-header pagea4">
-                <div class="d-flex justify-content-between align-items-center mb-3">
+                <div class="invoice-header__top">
                     <div>
-                        <span class="mb-0">Fatura nº <span id="fatura-id"></span></span>
-                        <span class="subtitle" id="subtitle-client"></span>
+                        <div class="invoice-header__eyebrow">Factura</div>
+                        <h1 class="invoice-header__title">
+                            <strong id="fatura-id">-</strong>
+                            <span id="status-invoice" class="invoice-status-badge is-draft d-none"></span>
+                        </h1>
+                        <span class="invoice-header__subtitle" id="subtitle-client">-</span>
+                        <div class="invoice-header__meta">Original</div>
                     </div>
-                    <div>
-                        <span id="status-invoice" class="d-none"></span>
+                </div>
+
+                <div class="invoice-toolbar" aria-label="Ações da fatura">
+                    <div class="invoice-toolbar__group">
+                        <button type="button" class="btn-invoice btn-invoice--primary d-none" id="btnRecibo" aria-label="Pagamento e recibo">
+                            <span class="material-icons-outlined" aria-hidden="true">paid</span>
+                            Pagamento / Recibo
+                        </button>
+                    </div>
+
+                    <div class="invoice-toolbar__group">
+                        <div class="d-none" id="generatePdf">
+                            <button class="btn-invoice btn-invoice--secondary" type="button" id="btnFormatoImpressao"
+                                data-bs-toggle="modal" data-bs-target="#modalPrintPreview" aria-label="Imprimir ou baixar a factura">
+                                <span class="material-icons-outlined" aria-hidden="true">print</span>
+                                Imprimir / Baixar
+                            </button>
+                        </div>
+
+                        <button type="button" class="btn-invoice btn-invoice--secondary d-none" id="btnEnviar"
+                            data-bs-toggle="modal" data-bs-target="#modalEnviarEmail" aria-label="Enviar factura por e-mail">
+                            <span class="material-icons-outlined" aria-hidden="true">send</span>
+                            Enviar factura
+                        </button>
+                    </div>
+
+                    <div class="dropdown invoice-more" id="moreActionsDropdown">
+                        <button class="btn-invoice btn-invoice--ghost dropdown-toggle" type="button" id="btnMaisAccoes"
+                            data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="menu" aria-label="Mais ações da factura">
+                            <span class="material-icons-outlined" aria-hidden="true">more_horiz</span>
+                            Mais ações
+                        </button>
+
+                        <div class="dropdown-menu dropdown-menu-end" aria-labelledby="btnMaisAccoes">
+                            <button type="button" class="dropdown-item d-none" id="btnCloneToInvoice" aria-label="Clonar factura">
+                                <span class="material-icons-outlined" aria-hidden="true">content_copy</span>
+                                Clonar factura
+                            </button>
+
+                            <button type="button" class="dropdown-item d-none" id="btnNotaCredito" aria-label="Emitir nota de crédito">
+                                <span class="material-icons-outlined" aria-hidden="true">assignment_return</span>
+                                Nota de crédito
+                            </button>
+
+                            <button type="button" class="dropdown-item d-none" id="btnNotaDebito" aria-label="Emitir nota de débito">
+                                <span class="material-icons-outlined" aria-hidden="true">request_quote</span>
+                                Nota de débito
+                            </button>
+
+                            <button type="button" class="dropdown-item d-none" id="btnNotaEntrega" aria-label="Emitir nota de entrega">
+                                <span class="material-icons-outlined" aria-hidden="true">local_shipping</span>
+                                Nota de entrega
+                            </button>
+
+                            <button type="button" class="dropdown-item d-none" id="btnEditar" aria-label="Editar factura">
+                                <span class="material-icons-outlined" aria-hidden="true">edit</span>
+                                Editar
+                            </button>
+
+                            <button type="button" class="dropdown-item d-none" id="btnFinalizar" aria-label="Finalizar factura">
+                                <span class="material-icons-outlined" aria-hidden="true">check_circle</span>
+                                Finalizar
+                            </button>
+
+                            <button type="button" class="dropdown-item danger d-none" id="btnDeleteInvoice" aria-label="Apagar factura">
+                                <span class="material-icons-outlined" aria-hidden="true">delete</span>
+                                Apagar
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
+
             <div id="preloader" style="display:none;">Carregando...</div>
-            <div id="fatura-container"
-                class="invoiceContainer shadow-sm bg-white ">
+            <div id="fatura-container" class="invoiceContainer shadow-sm bg-white">
                 <!-- aqui dentro já está todo o HTML da fatura -->
             </div>
         </div>
-
-        <!-- ③ –– Painel -->
-        <aside class="action-panel shadow-sm">
-
-            <!-- topo verde -->
-            <button class="btn text-center align-items-center align-content-center btn-success w-100 mb-2 fw-semibold" id="btnRecibo">
-                <span class="material-icons-outlined">paid</span>
-                Pagamento / Recibo
-            </button>
-
-            <button class="d-none btn btn-warning w-100 mb-2" id="btnFinalizar">
-                <span class="material-icons-outlined">check_circle</span>
-                Finalizar 
-            </button>
-
-            <button class="d-none btn text-center align-items-center align-content-center btn-secondary w-100 mb-2" id="btnEditar">
-                <span class="material-icons-outlined">edit</span>
-                Editar 
-            </button>
-
-            <!-- grupo Documento -->
-
-            <div class="d-none w-100 mb-2" id="generatePdf">
-                <button class="btn btn-primary w-100 text-center" type="button" id="btnFormatoImpressao"
-                    data-bs-toggle="modal" data-bs-target="#modalPrintPreview">
-                    <span class="material-icons-outlined align-middle">print</span>
-                    Imprimir / Baixar
-                </button>
-            </div>
-
-            <button class="d-none btn text-center d-none align-items-center align-content-center btn-info text-white w-100 mb-2" id="btnEnviar"
-                data-bs-toggle="modal" data-bs-target="#modalEnviarEmail">
-                <span class="material-icons-outlined">send</span>
-                Enviar fatura
-            </button>
-
-            <button class="d-none btn btn-purple w-100 mb-2" id="btnCloneToInvoice">
-                <span class="material-icons-outlined">copy</span>
-                Clonar Fatura
-            </button>
-
-            <!-- <h6 class="section-title">Documento</h6> -->
-
-            <button class="d-none btn text-center align-items-center align-content-center btn-danger w-100 mb-2" id="btnDeleteInvoice">
-                <span class="material-icons-outlined">close</span>
-                Apagar
-            </button>
-            <!-- <h6 class="section-title">Documento</h6> -->
-
-            <button class="d-none btn text-center align-items-center align-content-center btn-dark w-100 mb-2" id="btnNotaCredito">
-                <span class="material-icons-outlined">assignment_return</span>
-                Nota de Crédito
-            </button>
-
-
-        </aside>
     </div>
 
     <!-- Modal -->

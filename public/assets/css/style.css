@@ -33,78 +33,91 @@
   font-weight: 700;
   font-style: normal;
 }
+
 @font-face {
   font-family: "Quarion";
   src: url("../assets/font/Quarion-BoldItalic.ttf") format("truetype");
   font-weight: 700;
   font-style: italic;
 }
+
 @font-face {
   font-family: "Quarion";
   src: url("../assets/font/Quarion-Book.ttf") format("truetype");
   font-weight: 400;
   font-style: normal;
 }
+
 @font-face {
   font-family: "Quarion";
   src: url("../assets/font/Quarion-BookItalic.ttf") format("truetype");
   font-weight: 400;
   font-style: italic;
 }
+
 @font-face {
   font-family: "Quarion";
   src: url("../assets/font/Quarion-ExtraBold.ttf") format("truetype");
   font-weight: 800;
   font-style: normal;
 }
+
 @font-face {
   font-family: "Quarion";
   src: url("../assets/font/Quarion-ExtraBoldItalic.ttf") format("truetype");
   font-weight: 800;
   font-style: italic;
 }
+
 @font-face {
   font-family: "Quarion";
   src: url("../assets/font/Quarion-ExtraLight.ttf") format("truetype");
   font-weight: 200;
   font-style: normal;
 }
+
 @font-face {
   font-family: "Quarion";
   src: url("../assets/font/Quarion-ExtraLightItalic.ttf") format("truetype");
   font-weight: 200;
   font-style: italic;
 }
+
 @font-face {
   font-family: "Quarion";
   src: url("../assets/font/Quarion-Hairline.ttf") format("truetype");
   font-weight: 100;
   font-style: normal;
 }
+
 @font-face {
   font-family: "Quarion";
   src: url("../assets/font/Quarion-HairlineItalic.ttf") format("truetype");
   font-weight: 100;
   font-style: italic;
 }
+
 @font-face {
   font-family: "Quarion";
   src: url("../assets/font/Quarion-Heavy.ttf") format("truetype");
   font-weight: 900;
   font-style: normal;
 }
+
 @font-face {
   font-family: "Quarion";
   src: url("../assets/font/Quarion-HeavyItalic.ttf") format("truetype");
   font-weight: 900;
   font-style: italic;
 }
+
 @font-face {
   font-family: "Quarion";
   src: url("../assets/font/Quarion-Light.ttf") format("truetype");
   font-weight: 300;
   font-style: normal;
 }
+
 @font-face {
   font-family: "Quarion";
   src: url("../assets/font/Quarion-LightItalic.ttf") format("truetype");
@@ -161,8 +174,7 @@ html {
 .form-control:focus,
 .form-select:focus,
 .select2-container--default.select2-container--open .select2-selection--single,
-.select2-container--default.select2-container--focus
-  .select2-selection--single {
+.select2-container--default.select2-container--focus .select2-selection--single {
   border-color: var(--primary-color) !important;
   outline: 0;
   box-shadow: 0 0 0 0.25rem rgba(0, 122, 189, 0.25) !important;
@@ -174,17 +186,13 @@ html {
   align-items: center !important;
 }
 
-.select2-container--default
-  .select2-selection--single
-  .select2-selection__rendered {
+.select2-container--default .select2-selection--single .select2-selection__rendered {
   padding-left: 0 !important;
   color: #212529 !important;
   line-height: normal !important;
 }
 
-.select2-container--default
-  .select2-selection--single
-  .select2-selection__arrow {
+.select2-container--default .select2-selection--single .select2-selection__arrow {
   height: 36px !important;
   top: 1px !important;
   right: 1px !important;
@@ -418,9 +426,12 @@ a {
 }
 
 .modal-item .btn-close {
-  filter: invert(1); /* Deixa o botão branco */
-  outline: none !important; /* Remove a borda de foco */
-  box-shadow: none !important; /* Remove qualquer sombra */
+  filter: invert(1);
+  /* Deixa o botão branco */
+  outline: none !important;
+  /* Remove a borda de foco */
+  box-shadow: none !important;
+  /* Remove qualquer sombra */
 }
 
 .modal-item .btn-close:focus,
@@ -481,6 +492,7 @@ a {
 .btn-action:hover {
   filter: brightness(0.9);
 }
+
 /* Remove estilos conflitantes do Bootstrap */
 .table tbody tr {
   background-color: transparent !important;
@@ -488,17 +500,20 @@ a {
 
 /* Cor para linhas ímpares */
 tr:nth-child(odd) {
-  background-color: #007abd !important; /* Cinza bem leve */
+  background-color: #007abd !important;
+  /* Cinza bem leve */
 }
 
 /* Cor para linhas pares */
 .table tbody tr:nth-child(even) {
-  background-color: #ffffff !important; /* Branco */
+  background-color: #ffffff !important;
+  /* Branco */
 }
 
 /* Hover na linha ao passar o mouse */
 .table tbody tr:hover {
-  background-color: #a8a8a8 !important; /* Cinza um pouco mais escuro */
+  background-color: #a8a8a8 !important;
+  /* Cinza um pouco mais escuro */
   transition: background-color 0.2s ease-in-out;
 }
 
@@ -526,9 +541,12 @@ table {
 
 td,
 th {
-  text-align: center; /* Alinha horizontalmente ao centro */
-  vertical-align: middle; /* Alinha verticalmente ao meio */
-  padding: 10px; /* Adiciona um espaçamento interno para melhor visualização */
+  text-align: center;
+  /* Alinha horizontalmente ao centro */
+  vertical-align: middle;
+  /* Alinha verticalmente ao meio */
+  padding: 10px;
+  /* Adiciona um espaçamento interno para melhor visualização */
 }
 
 /* Ajuste para os ícones ficarem centralizados */
@@ -544,6 +562,7 @@ td button {
   flex-direction: column;
   gap: 10px;
 }
+
 .item-box {
   display: flex;
   align-items: center;
@@ -553,6 +572,7 @@ td button {
   border-radius: 5px;
   background: #f9f9f9;
 }
+
 .item-box input,
 .item-box select {
   border: 1px solid #ddd;
@@ -560,12 +580,15 @@ td button {
   border-radius: 3px;
   text-align: center;
 }
+
 .item-box input {
   width: 100%;
 }
+
 .item-box select {
   width: 100%;
 }
+
 .remove-item {
   color: #007abd;
   cursor: pointer;
@@ -596,15 +619,18 @@ td button {
 
 .tel {
   flex: 1;
-  min-width: 150px; /* Evita que o select fique muito pequeno */
+  min-width: 150px;
+  /* Evita que o select fique muito pequeno */
 }
 
 .telnumber {
   flex: 2;
-  min-width: 150px; /* Evita que o input fique muito pequeno */
+  min-width: 150px;
+  /* Evita que o input fique muito pequeno */
 }
 
 @media (max-width: 576px) {
+
   .tel,
   .telnumber {
     width: 100%;
@@ -612,29 +638,31 @@ td button {
 }
 
 .select2-container .select2-selection--single {
-  height: 38px; /* Ajusta a altura */
-  border: 1px solid #ccc; /* Mantém o mesmo estilo dos inputs */
-  padding: 6px 12px; /* Mantém o espaçamento interno */
-  font-size: 14px; /* Mesmo tamanho de fonte */
-  border-radius: 4px; /* Borda arredondada padrão */
+  height: 38px;
+  /* Ajusta a altura */
+  border: 1px solid #ccc;
+  /* Mantém o mesmo estilo dos inputs */
+  padding: 6px 12px;
+  /* Mantém o espaçamento interno */
+  font-size: 14px;
+  /* Mesmo tamanho de fonte */
+  border-radius: 4px;
+  /* Borda arredondada padrão */
 }
 
-.select2-container--default
-  .select2-selection--single
-  .select2-selection__rendered {
-  line-height: 26px; /* Alinha o texto verticalmente */
-  color: #495057; /* Mesma cor do input padrão */
+.select2-container--default .select2-selection--single .select2-selection__rendered {
+  line-height: 26px;
+  /* Alinha o texto verticalmente */
+  color: #495057;
+  /* Mesma cor do input padrão */
 }
 
-.select2-container--default
-  .select2-selection--single
-  .select2-selection__arrow {
-  height: 34px; /* Ajusta a altura do dropdown */
+.select2-container--default .select2-selection--single .select2-selection__arrow {
+  height: 34px;
+  /* Ajusta a altura do dropdown */
 }
 
-.select2-results__option
-  .select2-results__option--selectable
-  .select2-results__option--highlighted {
+.select2-results__option .select2-results__option--selectable .select2-results__option--highlighted {
   font-family: "Roboto", sans-serif !important;
 }
 
@@ -648,8 +676,10 @@ td button {
 }
 
 .blocked-select {
-  pointer-events: none; /* Impede clique no select */
-  background-color: #e9ecef; /* Aparência de desativado (igual a um campo disabled) */
+  pointer-events: none;
+  /* Impede clique no select */
+  background-color: #e9ecef;
+  /* Aparência de desativado (igual a um campo disabled) */
 }
 
 .edit-contact,
@@ -657,6 +687,7 @@ td button {
   background-color: transparent;
   border: none;
 }
+
 .edit-contact .material-icons-round,
 .delete-contact .material-icons-round {
   font-size: 1.2rem;
@@ -681,7 +712,8 @@ td button {
 /* Garantir que o cabeçalho não quebre */
 .dataTables-BXpert thead th,
 .dataTables-BXpert tfoot th {
-  white-space: nowrap; /* Evita quebra de texto no cabeçalho e rodapé */
+  white-space: nowrap;
+  /* Evita quebra de texto no cabeçalho e rodapé */
 }
 
 /* Linhas de células sem quebra */
@@ -969,11 +1001,13 @@ button#exportExcel {
   right: 10px;
   top: 57% !important;
   transform: translateY(-50%);
-  color: #6c757d; /* Ajusta a cor do ícone */
+  color: #6c757d;
+  /* Ajusta a cor do ícone */
 }
 
 #togglePassword:hover {
-  color: #495057; /* Cor ao passar o mouse */
+  color: #495057;
+  /* Cor ao passar o mouse */
 }
 
 div.dt-length label {
@@ -987,6 +1021,14 @@ div.dt-length select {
 
 body.sidebar-open {
   overflow: hidden;
+}
+
+#newContact {
+  transform: translateY(-1px);
+  font-size: 0.9rem;
+  padding: 5px 18px !important;
+  height: 35px !important;
+  margin-top: 10px;
 }
 
 .popup-menu {
@@ -1077,8 +1119,10 @@ body.sidebar-open {
 }
 
 #bgLogin {
-  background-image: url("../img/fundo-login-vermelho.png");
+  background-image: url("../img/fundo-register.png");
+  background-size: cover;
   background-repeat: no-repeat;
+  background-position: center center;
 }
 
 #bgRegister {
@@ -1113,6 +1157,7 @@ body.sidebar-open {
 }
 
 @media screen and (device-width: 800px) and (orientation: portrait) {
+
   /* Força o layout desktop no Xiaomi Pad 5 ou similares */
   #bgLogin {
     display: flex !important;
@@ -1156,8 +1201,8 @@ iframe {
     -webkit-overflow-scrolling: touch;
   }
 
-  table.table:not(.table-bx-standard) > thead,
-  table.table:not(.table-bx-standard) > tbody {
+  table.table:not(.table-bx-standard)>thead,
+  table.table:not(.table-bx-standard)>tbody {
     display: table;
     width: 100%;
     min-width: 560px;

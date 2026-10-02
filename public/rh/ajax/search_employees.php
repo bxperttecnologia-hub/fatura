@@ -5,19 +5,15 @@ session_start();
 $company_id = $_SESSION['user']['company_id'];
 $term = $_GET['term'] ?? '';
 
-// Fase 1: a ligação principal passa a ser por e.position_id = p.id
-// (chave, não texto). Mantemos um fallback por TRIM(nome) só para
-// funcionários cujo position_id ainda não tenha sido preenchido pela
-// migração (rh/migrations/migrate_fase1_position_id.php) — depois de
-// essa migração correr em todas as empresas, o fallback nunca chega a
-// ser usado, mas fica como rede de segurança em vez de voltar a
-// "desaparecer" funcionários dos selects.
+// Fase 1: já usa employees.position_id como fonte de verdade (mais rápido,
+// não depende de o texto do cargo bater certo). Mantém o fallback por TRIM()
+// só para o caso raro de um funcionário ainda não migrado (position_id nulo) —
+// ver migrations/fase1_migrate_positions.php.
 $sql = "SELECT e.id, e.name, e.salary_base AS salary, e.position, p.name as position_name, p.suggested_salary, p.food_allowance, p.transport_allowance, p.vacation_subsidy_pct, p.thirteenth_subsidy_pct FROM employees as e
-        LEFT JOIN positions as p ON p.company_id = e.company_id
-            AND (
-                (e.position_id IS NOT NULL AND p.id = e.position_id)
-                OR (e.position_id IS NULL AND TRIM(p.name) = TRIM(e.position))
-            )
+        LEFT JOIN positions as p ON (
+            (e.position_id IS NOT NULL AND p.id = e.position_id)
+            OR (e.position_id IS NULL AND p.company_id = e.company_id AND TRIM(p.name) = TRIM(e.position))
+        )
         WHERE e.company_id = ? AND e.status = 'ativo' AND e.name LIKE ? 
         ORDER BY e.name ASC LIMIT 20";
 

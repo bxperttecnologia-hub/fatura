@@ -705,7 +705,7 @@ $dashboardCanStock = subscription_feature_allowed($dashboardPlan, 'stock');
 
                                     <div class="card card-custom top-cards p-3 mb-4">
                                         <div class="d-flex justify-content-between mb-3">
-                                            <h6 class="h-title"><i class="bi bi-file-earmark-text"></i> Últimas Faturas</h6>
+                                            <h6 class="h-title"><i class="bi bi-file-earmark-text"></i> Últimas Facturas</h6>
                                             <a href="list_invoices.php" class="small text-primary">Ver todas <i class="bi bi-chevron-right"></i></a>
                                         </div>
 

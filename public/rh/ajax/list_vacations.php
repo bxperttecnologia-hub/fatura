@@ -1,5 +1,6 @@
 <?php
 require_once '../../../app/config/db.php';
+require_once __DIR__ . '/../lib/rh_helpers.php';
 session_start();
 
 $company_id = $_SESSION['user']['company_id'];
@@ -34,4 +35,12 @@ $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 
 $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Fase 2: dias úteis do período (exclui sábados, domingos e feriados),
+// para comparar com a bolsa de 22 dias úteis/ano (Lei Geral do Trabalho).
+foreach ($rows as &$row) {
+    $row['working_days'] = rh_working_days($pdo, (int)$company_id, $row['start_date'], $row['end_date']);
+}
+unset($row);
+
 echo json_encode(['data' => $rows]);
