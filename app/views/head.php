@@ -1,44 +1,15 @@
 (function () {
   'use strict';
 
-  function boot() {
-    if (window.BXpertRouter && typeof window.BXpertRouter.init === 'function') {
-      window.BXpertRouter.init();
-    }
+  /**
+   * AVISO: BXpertRouter é inicializado automaticamente em router.js
+   * Não é necessário chamar init() aqui novamente.
+   * 
+   * BXpertSPA não existe — foi substituído por BXpertRouter.
+   * Manter este código apenas como referência.
+   */
 
-    if (window.BXpertRouter && typeof window.BXpertRouter.highlightActiveLink === 'function') {
-      window.BXpertRouter.highlightActiveLink();
-    }
+  // Router já está inicializado automaticamente
+  // Nenhuma ação adicional necessária neste momento
 
-    if (window.BXpertSPA && typeof window.BXpertSPA.initializeView === 'function') {
-      window.BXpertSPA.initializeView(window.location.pathname || '/');
-    }
-  }
-
-  document.addEventListener('DOMContentLoaded', boot);
 })();
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
